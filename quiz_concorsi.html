@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quiz Concorsi</title>
+    <meta name="theme-color" content="#12827c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* ================= CSS VARIABLES & THEMES ================= */
+        :root {
+            --pr: #12827c;
+            --pr-rgb: 18, 130, 124;
+            --pr2: #1fa393;
+            --bg: #f3f4f6;
+            --surface: rgba(255, 255, 255, 0.75); /* Aggiunta trasparenza per Glassmorphism */
+            --text: #1f2937;
+            --text-sec: #4b5563;
+            --border: rgba(229, 231, 235, 0.6);
+            --shadow-soft: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            --shadow-deep: 0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1);
+            --header-bg: rgba(255, 255, 255, 0.65);
+            --nav-bg: rgba(255, 255, 255, 0.75);
+            --overlay-bg: rgba(0, 0, 0, 0.4);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        [data-theme="dark"] {
+            --bg: #111827;
+            --surface: rgba(31, 41, 55, 0.75);
+            --text: #f9fafb;
+            --text-sec: #9ca3af;
+            --border: rgba(55, 65, 81, 0.6);
+            --header-bg: rgba(17, 24, 39, 0.65);
+            --nav-bg: rgba(31, 41, 55, 0.85);
+            --shadow-soft: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --shadow-deep: 0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(255,255,255,0.05);
+            --overlay-bg: rgba(0, 0, 0, 0.6);
+        }
+
+        [data-theme="amoled"] {
+            --bg: #000000;
+            --surface: rgba(10, 10, 10, 0.75);
+            --text: #ffffff;
+            --text-sec: #888888;
+            --border: rgba(34, 34, 34, 0.6);
+            --header-bg: rgba(0, 0, 0, 0.65);
+            --nav-bg: rgba(15, 15, 15, 0.85);
+            --shadow-soft: 0 8px 32px 0 rgba(255, 255, 255, 0.03);
+            --shadow-deep: 0 10px 25px -5px rgba(255,255,255,0.1);
+            --overlay-bg: rgba(0, 0, 0, 0.8);
+        }
+
+        /* ================= BASE RESET & LAYOUT ================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; min-width: 0; }
+        
+        /* Evitiamo overflow-x: hidden su html/body, usiamo un wrapper */
+        body { background: var(--bg); color: var(--text); overscroll-behavior: none; }
+        
+        .app-wrapper {
+            position: fixed; inset: 0;
+            width: 100%; height: 100vh; height: 100dvh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ================= HEADER ================= */
+        header {
+            position: sticky; top: 0; z-index: 50;
+            height: 60px; display: flex; align-items: center; justify-content: center;
+            background: var(--header-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600; font-size: 18px; letter-spacing: 0.5px;
+        }
+
+        /* ================= SWIPE TRACK & PANELS ================= */
+        .track-container { flex: 1; position: relative; overflow: hidden; }
+        .track {
+            display: flex; width: 400%; height: 100%;
+            transform: translate3d(0, 0, 0); will-change: transform;
+            touch-action: pan-y; /* Permette scroll verticale nativo, delega l'orizzontale al JS passivo */
+        }
+        .panel {
+            width: 25%; height: 100%; overflow-y: auto; overflow-x: hidden;
+            padding: 16px 16px 100px 16px; /* Spazio per la bottom bar */
+        }
+
+        /* ================= UI COMPONENTS (CARDS, BUTTONS) ================= */
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 16px; padding: 16px; margin-bottom: 16px;
+            box-shadow: var(--shadow-soft); transition: transform 0.2s;
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            background: var(--pr); color: white; border: none;
+            border-radius: 14px; padding: 12px 20px; font-weight: 600; font-size: 16px;
+            cursor: pointer; box-shadow: var(--shadow-soft); transition: opacity 0.2s;
+            width: 100%;
+        }
+        .btn:active { opacity: 0.8; }
+        .btn-outline {
+            background: transparent; color: var(--pr);
+            border: 2px solid var(--pr); box-shadow: none;
+        }
+        .btn-small { padding: 8px 12px; font-size: 14px; width: auto; border-radius: 10px; }
+
+        .title-sec { font-size: 14px; color: var(--text-sec); text-transform: uppercase; font-weight: 600; margin: 24px 0 12px 4px; }
+        
+        /* ================= BOTTOM BAR ================= */
+        .bottom-bar {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            width: calc(100% - 32px); max-width: 450px; height: 64px;
+            background: var(--nav-bg);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-radius: 99px; box-shadow: var(--shadow-deep);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 8px; border: 1px solid var(--border);
+        }
+        .nav-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; color: var(--text-sec); z-index: 2; position: relative;
+            cursor: pointer; font-size: 11px; font-weight: 600; transition: color 0.3s;
+        }
+        .nav-item.active { color: #ffffff !important; }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        
+        .nav-indicator {
+            position: absolute; top: 8px; bottom: 8px;
+            background: linear-gradient(135deg, var(--pr), var(--pr2));
+            border-radius: 99px; z-index: 1;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        /* ================= TOPICS & TIMER ================= */
+        .topic-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 20px; }
+        .topic-card {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px; background: var(--surface); border: 2px solid var(--border);
+            border-radius: 14px; cursor: pointer; transition: all 0.2s;
+            box-shadow: var(--shadow-soft);
+        }
+        .topic-card:active { transform: scale(0.98); }
+        .topic-card.selected { border-color: var(--pr); background: rgba(var(--pr-rgb), 0.05); }
+        .topic-title { font-weight: 600; font-size: 15px; }
+        .topic-count { font-size: 12px; color: var(--text-sec); background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 20px; font-weight: bold; }
+        
+        .time-bar-wrapper { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .time-bar-fill { height: 100%; background: var(--pr); width: 100%; transition: width 1s linear, background-color 0.3s; }
+        .time-bar-fill.warning { background: #f59e0b; }
+        .time-bar-fill.danger { background: #ef4444; }
+
+        /* ================= PANELS ================= */
+        .track-container { flex: 1; position: relative; overflow: hidden; }
+        .track {
+            display: flex; width: 400%; height: 100%;
+            transform: translate3d(0, 0, 0); will-change: transform;
+            touch-action: pan-y;
+        }
+        .panel {
+            width: 25%; height: 100%; overflow-y: auto; overflow-x: hidden;
+            padding: 16px 16px 120px 16px; /* Spazio incrementato per bottom bar fixed */
+        }
+        .topic-card:active { transform: scale(0.98); }
+        .topic-card.active { border-color: var(--pr); background: rgba(var(--pr-rgb), 0.1); color: var(--pr); }
+        .topic-count {
+            background: var(--border); color: var(--text-sec);
+            padding: 4px 10px; border-radius: 99px; font-size: 13px; font-weight: 700;
+        }
+        .topic-card.active .topic-count { background: var(--pr); color: white; }
+
+        /* ================= BOTTOM BAR ================= */
+        .bottom-bar {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            width: calc(100% - 32px); max-width: 450px; height: 64px;
+            background: var(--nav-bg);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-radius: 99px; box-shadow: var(--shadow-deep);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 8px; border: 1px solid var(--border);
+        }
+        .nav-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; color: var(--text-sec); z-index: 5; position: relative; /* Z-Index aumentato per non scomparire */
+            cursor: pointer; font-size: 11px; font-weight: 500; transition: color 0.3s;
+        }
+        .nav-item.active { color: #ffffff !important; } /* Colore fisso sul bianco (contrasta sempre con l'indicatore scuro/colorato) */
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        
+        .nav-indicator {
+            position: absolute; top: 8px; bottom: 8px;
+            background: linear-gradient(135deg, var(--pr), var(--pr2));
+            border-radius: 99px; z-index: 1;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        /* ================= FORMS & CONTROLS ================= */
+        .stepper { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+        .stepper button { flex: 1; padding: 12px; background: transparent; border: none; color: var(--pr); font-size: 20px; font-weight: bold; cursor: pointer; }
+        .stepper input { flex: 2; text-align: center; border: none; background: transparent; color: var(--text); font-size: 16px; font-weight: 600; pointer-events: none; }
+        
+        .topic-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 20px; }
+        .topic-btn { padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-weight: 500; text-align: left; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; cursor: pointer; }
+        .topic-btn.active { border-color: var(--pr); background: rgba(var(--pr-rgb), 0.1); color: var(--pr); box-shadow: var(--shadow-soft); }
+        .topic-count { font-size: 12px; background: var(--border); color: var(--text-sec); padding: 3px 10px; border-radius: 99px; font-weight: 600; }
+        .topic-btn.active .topic-count { background: var(--pr); color: white; }
+
+        .time-bar-container { height: 5px; background: var(--border); border-radius: 3px; margin-top: 6px; overflow: hidden; width: 100px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); }
+        .time-fill { height: 100%; background: var(--pr); width: 100%; transition: width 1s linear, background-color 0.3s ease; border-radius: 3px; }
+        .time-fill.danger { background: #ef4444; }
+
+        .color-dots { display: flex; gap: 12px; justify-content: center; margin-top: 12px; }
+        .dot { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
+        .dot.active { transform: scale(1.2); border-color: var(--text); }
+
+        .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;}
+        .theme-btn { padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); font-weight: 500; }
+        .theme-btn.active { border-color: var(--pr); background: rgba(var(--pr-rgb), 0.1); color: var(--pr); }
+
+        /* ================= QUIZ UI ================= */
+        .option {
+            padding: 14px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px;
+            background: var(--surface); cursor: pointer; transition: all 0.2s;
+        }
+        .option.selected { border-color: var(--pr); background: rgba(var(--pr-rgb), 0.1); }
+        .option.correct { border-color: #22c55e; background: rgba(34, 197, 94, 0.1); }
+        .option.wrong { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        
+        .explanation {
+            margin-top: 16px; padding: 16px; border-radius: 12px;
+            background: rgba(var(--pr-rgb), 0.1); color: var(--text);
+            border-left: 4px solid var(--pr); display: none; font-size: 14px; line-height: 1.5;
+        }
+        
+        .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin: 16px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--pr); width: 0%; transition: width 0.3s; }
+
+        /* ================= MODALS & TOASTS ================= */
+        .overlay {
+            position: fixed; inset: 0; background: var(--overlay-bg); z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .overlay.active { opacity: 1; pointer-events: auto; }
+        .modal {
+            background: var(--surface); padding: 24px; border-radius: 16px;
+            width: 85%; max-width: 350px; box-shadow: var(--shadow-deep);
+            transform: scale(0.9); transition: transform 0.2s; text-align: center;
+        }
+        .overlay.active .modal { transform: scale(1); }
+        
+        .toast {
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: var(--text); color: var(--bg); padding: 12px 24px;
+            border-radius: 99px; font-size: 14px; font-weight: 500;
+            opacity: 0; z-index: 110; transition: all 0.3s; box-shadow: var(--shadow-soft);
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        .hidden { display: none !important; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <header id="top-bar">Quiz PA</header>
+
+    <div class="track-container">
+        <div class="track" id="track">
+            <!-- TAB 0: QUIZ -->
+            <div class="panel" id="panel-quiz">
+                <div id="quiz-setup">
+                    <div class="card">
+                        <h2 style="margin-bottom: 8px;">Nuova Simulazione</h2>
+                        <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 16px;">Scegli l'argomento e imposta il timer (0 = Infinito).</p>
+                        
+                        <div id="topic-grid" class="topic-grid">
+                            <!-- Popolato via JS -->
+                        </div>
+                        
+                        <label class="title-sec" style="display:block; margin: 16px 0 8px 0;">Numero di Domande</label>
+                        <div class="stepper">
+                            <button id="btn-q-minus">−</button>
+                            <input type="text" id="q-input" value="10" readonly>
+                            <button id="btn-q-plus">+</button>
+                        </div>
+                        
+                        <label class="title-sec" style="display:block; margin: 16px 0 8px 0;">Tempo (minuti)</label>
+                        <div class="stepper">
+                            <button id="btn-time-minus">−</button>
+                            <input type="text" id="time-input" value="0 (Infinito)" readonly>
+                            <button id="btn-time-plus">+</button>
+                        </div>
+                        
+                        <button class="btn" style="margin-top: 24px;" onclick="startQuiz(false)">Avvia Quiz</button>
+                        <button class="btn btn-outline" style="margin-top: 12px;" onclick="startQuiz(true)" id="btn-review-mode">Ripassa Errori (<span id="err-count">0</span>)</button>
+                    </div>
+                </div>
+
+                <div id="quiz-active" class="hidden">
+                    <div class="flex-between" style="align-items: flex-end;">
+                        <span id="q-counter" style="font-weight: 600; color: var(--text-sec);">1/10</span>
+                        <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                            <span id="q-timer" style="font-weight: bold; color: var(--pr); font-variant-numeric: tabular-nums; font-size: 20px; line-height: 1;">30:00</span>
+                            <div class="time-bar-container" id="time-bar-wrap"><div class="time-fill" id="q-time-fill"></div></div>
+                        </div>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" id="q-progress"></div></div>
+                    
+                    <div class="card">
+                        <div id="q-topic" class="title-sec" style="margin: 0 0 8px 0; color: var(--pr);">Argomento</div>
+                        <h3 id="q-text" style="margin-bottom: 20px; font-size: 18px;"></h3>
+                        <div id="q-options"></div>
+                        <div id="q-explanation" class="explanation"></div>
+                    </div>
+                    
+                    <button id="btn-next" class="btn hidden" onclick="nextQuestion()">Prossima Domanda</button>
+                    <button id="btn-end" class="btn btn-outline" style="margin-top: 12px;" onclick="confirmEndQuiz()">Termina Quiz</button>
+                </div>
+                
+                <div id="quiz-result" class="hidden">
+                    <div class="card" style="text-align: center; padding: 32px 16px;">
+                        <h2>Risultato Finale</h2>
+                        <div style="font-size: 48px; font-weight: bold; color: var(--pr); margin: 16px 0;" id="res-score">8/10</div>
+                        <p id="res-msg" style="color: var(--text-sec);"></p>
+                        <button class="btn" style="margin-top: 24px;" onclick="resetQuizView()">Torna alla Home</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 1: ERRORI -->
+            <div class="panel" id="panel-errors">
+                <h2 style="margin: 8px 4px 16px 4px;">Database Errori</h2>
+                <div id="errors-list">
+                    <!-- Popolato via JS -->
+                </div>
+            </div>
+
+            <!-- TAB 2: REPORT -->
+            <div class="panel" id="panel-report">
+                <h2 style="margin: 8px 4px 16px 4px;">Le tue Statistiche</h2>
+                <div class="card flex-between">
+                    <span>Quiz Completati</span>
+                    <strong id="stat-total" style="font-size: 20px;">0</strong>
+                </div>
+                <div class="card flex-between">
+                    <span>Precisione Media</span>
+                    <strong id="stat-avg" style="font-size: 20px;">0%</strong>
+                </div>
+                
+                <div class="title-sec">Esporta Dati</div>
+                <div class="card">
+                    <p style="font-size: 14px; color: var(--text-sec); margin-bottom: 16px;">Esporta i tuoi risultati e la lista degli errori per la stampa o l'analisi.</p>
+                    <button class="btn" style="margin-bottom: 12px;" onclick="exportPDF()">Esporta in PDF</button>
+                    <button class="btn btn-outline" onclick="exportCSV()">Esporta in CSV</button>
+                </div>
+            </div>
+
+            <!-- TAB 3: IMPOSTAZIONI -->
+            <div class="panel" id="panel-settings">
+                <h2 style="margin: 8px 4px 16px 4px;">Impostazioni</h2>
+                
+                <div class="title-sec">Tema Visivo</div>
+                <div class="theme-grid">
+                    <button class="theme-btn active" data-theme="system">Sistema</button>
+                    <button class="theme-btn" data-theme="light">Chiaro</button>
+                    <button class="theme-btn" data-theme="dark">Scuro</button>
+                    <button class="theme-btn" data-theme="amoled">Amoled</button>
+                </div>
+
+                <div class="title-sec">Colore Accento</div>
+                <div class="card">
+                    <div class="color-dots" id="color-dots">
+                        <div class="dot" style="background: #12827c" data-c="#12827c" data-c2="#1fa393" data-rgb="18,130,124"></div>
+                        <div class="dot" style="background: #2563eb" data-c="#2563eb" data-c2="#3b82f6" data-rgb="37,99,235"></div>
+                        <div class="dot" style="background: #8b5cf6" data-c="#8b5cf6" data-c2="#a78bfa" data-rgb="139,92,246"></div>
+                        <div class="dot" style="background: #059669" data-c="#059669" data-c2="#10b981" data-rgb="5,150,105"></div>
+                        <div class="dot" style="background: #d97706" data-c="#d97706" data-c2="#f59e0b" data-rgb="217,119,6"></div>
+                        <div class="dot" style="background: #ea580c" data-c="#ea580c" data-c2="#f97316" data-rgb="234,88,12"></div>
+                    </div>
+                </div>
+
+                <div class="title-sec">Dati App</div>
+                <div class="card">
+                    <button class="btn btn-outline" style="margin-bottom: 12px;" onclick="exportJSON()">Backup Dati (JSON)</button>
+                    <button class="btn btn-outline" style="margin-bottom: 12px;" onclick="document.getElementById('import-file').click()">Ripristina Backup</button>
+                    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+                    <button class="btn" style="background: #ef4444;" onclick="confirmResetAll()">Resetta Tutto</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM BAR -->
+    <nav class="bottom-bar" id="bottom-bar">
+        <div class="nav-indicator" id="nav-indicator"></div>
+        <div class="nav-item active" data-tab="0">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>Quiz</span>
+        </div>
+        <div class="nav-item" data-tab="1">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>Errori</span>
+        </div>
+        <div class="nav-item" data-tab="2">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            <span>Report</span>
+        </div>
+        <div class="nav-item" data-tab="3">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Impost.</span>
+        </div>
+    </nav>
+</div>
+
+<!-- MODAL OVERLAY -->
+<div class="overlay" id="modal-overlay">
+    <div class="modal">
+        <h3 id="modal-title" style="margin-bottom: 12px; font-size: 18px;"></h3>
+        <p id="modal-msg" style="color: var(--text-sec); margin-bottom: 24px; font-size: 14px;"></p>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-outline" id="modal-cancel">Annulla</button>
+            <button class="btn" id="modal-confirm">Conferma</button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">Messaggio</div>
+
+<script>
+    /* ================= DATA: DOMANDE ================= */
+    const questionsDb = [
+        // 1. Manutenzione (Edile, Elettrico, Idraulico, Falegnameria) - 30 Domande
+        { id: 1, topic: "Manutenzione", text: "In un impianto elettrico a norma (norma CEI 64-8), quale funzione assolve l'interruttore magnetotermico?", options: ["Protegge le persone dalle folgorazioni", "Protegge i cavi e l'impianto da sovraccarichi e cortocircuiti", "Misura il consumo di energia elettrica", "Impedisce il distacco del contatore ENEL"], correct: 1, expl: "Il magnetotermico interviene in caso di assorbimento eccessivo (sovraccarico) o cortocircuito, prevenendo incendi e danni all'impianto." },
+        { id: 2, topic: "Manutenzione", text: "Nel cablaggio degli impianti elettrici civili in bassa tensione, il conduttore di neutro di quale colore deve essere obbligatoriamente rivestito?", options: ["Giallo-Verde", "Nero o Marrone", "Blu chiaro (o azzurro)", "Rosso"], correct: 2, expl: "La norma prescrive l'azzurro/blu chiaro per il neutro, il giallo-verde per la terra e colori scuri (marrone, nero, grigio) per le fasi." },
+        { id: 3, topic: "Manutenzione", text: "Cos'è il 'massetto' di posa in edilizia?", options: ["Lo strato in laterizio della copertura del tetto", "L'elemento di malta cementizia, orizzontale, che serve a livellare il fondo per la posa del pavimento", "Un tipo di intonaco per esterni resistente all'acqua", "Una fondazione profonda in cemento armato"], correct: 1, expl: "Il massetto è lo strato di supporto, solitamente in sabbia e cemento, su cui vengono posate le piastrelle o il parquet." },
+        { id: 4, topic: "Manutenzione", text: "In ambito idraulico, a quale scopo si installa un 'sifone' sotto gli apparecchi sanitari?", options: ["Per aumentare la pressione di erogazione", "Per filtrare le impurità dell'acqua potabile", "Per impedire il ritorno dei gas maleodoranti dalla rete fognaria", "Per separare l'acqua calda da quella fredda"], correct: 2, expl: "Il sifone mantiene una certa quantità d'acqua al suo interno che funge da 'tappo idraulico' contro la risalita dei cattivi odori." },
+        { id: 5, topic: "Manutenzione", text: "Quale strumento manuale è indispensabile per filettare un tubo idraulico in acciaio zincato?", options: ["La pialla", "La filiera", "La smerigliatrice angolare", "La chiave a rullino"], correct: 1, expl: "La filiera (manuale o elettrica) è l'utensile dotato di pettini taglienti che incide il filetto sull'estremità del tubo." },
+        { id: 6, topic: "Manutenzione", text: "Durante la preparazione di una parete per la tinteggiatura, qual è la funzione del 'fissativo' (o primer)?", options: ["Colorare la parete in modo definitivo", "Uniformare l'assorbimento dell'intonaco e favorire l'adesione della pittura", "Creare un effetto ruvido e decorativo", "Sostituire la malta rasante"], correct: 1, expl: "Il fissativo acrilico isola, consolida e rende omogeneo l'assorbimento del supporto, ottimizzando la resa dell'idropittura." },
+        { id: 7, topic: "Manutenzione", text: "Con il termine 'tramezzo' si indica:", options: ["Una parete divisoria interna non portante", "Una trave del solaio", "Il muro perimetrale portante di un edificio", "Un infisso esterno in alluminio"], correct: 0, expl: "Il tramezzo (o tramezza) serve solo a dividere gli spazi interni e non ha funzione strutturale o portante." },
+        { id: 8, topic: "Manutenzione", text: "In falegnameria, quale attrezzo si utilizza per asportare spessori minimi di legno al fine di ottenere una superficie piana e liscia?", options: ["La sega circolare", "Il trapano a colonna", "La pialla (manuale o elettrica)", "La raspa"], correct: 2, expl: "La pialla lavora la superficie del legno asportando trucioli sottili per spianare e livellare." },
+        { id: 9, topic: "Manutenzione", text: "Per misurare la continuità di un cavo elettrico o la tensione di una presa, si utilizza:", options: ["Il calibro a corsoio", "Il multimetro (o tester)", "Il flessometro", "Il fonometro"], correct: 1, expl: "Il multimetro integra voltmetro (tensione), amperometro (corrente) e ohmmetro (resistenza/continuità)." },
+        { id: 10, topic: "Manutenzione", text: "In edilizia, la 'malta bastarda' è così definita perché:", options: ["È di scarsa qualità costruttiva", "È composta impiegando contemporaneamente due leganti (es. calce e cemento)", "Viene impastata senza acqua", "Contiene gesso a presa rapida"], correct: 1, expl: "L'uso di calce e cemento conferisce alla malta bastarda sia buona lavorabilità che elevata resistenza meccanica." },
+        { id: 11, topic: "Manutenzione", text: "Per la giunzione a tenuta stagna di raccordi filettati in idraulica, quale materiale si avvolge sul filetto maschio?", options: ["Nastro biadesivo", "Nastro isolante in PVC", "Canapa (abbinata a pasta verde) o nastro in PTFE (Teflon)", "Mastice per vetri"], correct: 2, expl: "La canapa o il teflon riempiono le tolleranze tra i filetti garantendo la tenuta idraulica in pressione." },
+        { id: 12, topic: "Manutenzione", text: "L'interruttore differenziale è comunemente noto come:", options: ["Contatore", "Salvavita", "Commutatore", "Relè"], correct: 1, expl: "Il differenziale 'salvavita' rileva la differenza di corrente tra fase e neutro; se c'è dispersione (es. verso una persona o verso terra) scatta." },
+        { id: 13, topic: "Manutenzione", text: "Nella posa dei pavimenti in ceramica, cos'è la 'fuga'?", options: ["L'interstizio lasciato tra una piastrella e l'altra, successivamente riempito con stucco apposito", "Il battiscopa perimetrale", "Un difetto di planarità del massetto", "Il collante usato per fissare le piastrelle"], correct: 0, expl: "La fuga compensa le tolleranze dimensionali delle piastrelle e assorbe i naturali movimenti di dilatazione del pavimento." },
+        { id: 14, topic: "Manutenzione", text: "Quale attrezzo è specifico per eseguire tagli curvi o sagomati di precisione su pannelli di legno o plastica?", options: ["Smerigliatrice angolare (Flessibile)", "Sega circolare", "Seghetto alternativo", "Troncatrice a disco"], correct: 2, expl: "La lama sottile e il movimento alternato permettono al seghetto alternativo di seguire agevolmente linee curve." },
+        { id: 15, topic: "Manutenzione", text: "A cosa serve una 'scatola di derivazione' in un impianto elettrico sottotraccia?", options: ["A contenere esclusivamente i salvavita", "Ad ospitare i nodi di giunzione e smistamento dei cavi tra le varie linee dell'impianto", "A installare i lampadari a soffitto", "A coprire i tubi dell'acqua"], correct: 1, expl: "Nelle scatole di derivazione si effettuano i collegamenti (tramite morsetti) che diramano la corrente ai vari punti luce e prese." },
+        { id: 16, topic: "Manutenzione", text: "In idraulica, una valvola 'di ritegno' (o di non ritorno) ha la funzione di:", options: ["Miscelare acqua calda e fredda", "Consentire il flusso del fluido in una sola direzione, impedendone l'inversione", "Scaricare la pressione in eccesso (valvola di sicurezza)", "Chiudere automaticamente l'acqua in caso di allagamento"], correct: 1, expl: "La valvola di ritegno permette il passaggio dell'acqua in un verso ma si blocca automaticamente se il flusso si inverte." },
+        { id: 17, topic: "Manutenzione", text: "Per forare una parete in cemento armato, quale trapano è necessario utilizzare?", options: ["Trapano avvitatore a batteria leggero", "Trapano a percussione o tassellatore", "Trapano a colonna", "Miscelatore elettrico"], correct: 1, expl: "L'azione battente (percussione) della punta al widia (carburo di tungsteno) è indispensabile per frantumare materiali duri come il calcestruzzo." },
+        { id: 18, topic: "Manutenzione", text: "Cos'è lo 'stucco metallico' o stucco bicomponente?", options: ["Uno stucco per legno a base d'acqua", "Uno stucco a presa rapida formulato con una resina e un induritore, usato per riparare metalli, carrozzerie o legni molto rovinati", "Un prodotto per lucidare l'ottone", "Una colla vinilica per carta"], correct: 1, expl: "Miscelando la pasta con l'induritore, avviene una reazione chimica che indurisce lo stucco in pochi minuti, rendendolo carteggiabile e verniciabile." },
+        { id: 19, topic: "Manutenzione", text: "Come si effettua l'accensione e lo spegnimento di un punto luce da tre o più punti diversi in un corridoio?", options: ["Utilizzando un interruttore unipolare e vari deviatori", "Utilizzando pulsanti normalmente aperti collegati a un relè passo-passo", "Utilizzando tre salvavita collegati in serie", "È tecnicamente impossibile, il limite è due punti"], correct: 1, expl: "Per 3 o più punti, la soluzione più pratica e moderna è l'uso del relè ciclico (passo-passo) comandato da pulsanti in parallelo." },
+        { id: 20, topic: "Manutenzione", text: "Per fissare un carico pesante (es. una pensile) su un muro in cartongesso, si deve utilizzare:", options: ["Un chiodo d'acciaio lungo", "Un tassello specifico ad espansione per lastre/cartongesso (es. tassello a farfalla o ad ancora)", "Un normale tassello in nylon da muro pieno", "Colla a caldo"], correct: 1, expl: "I tasselli per cartongesso si aprono a raggiera (o a ombrello) dietro la lastra, distribuendo il peso su una superficie maggiore." },
+        { id: 21, topic: "Manutenzione", text: "In muratura, qual è la funzione del 'filo a piombo'?", options: ["Verificare l'esatta orizzontalità di una trave", "Verificare la perfetta verticalità di una parete o di un pilastro", "Misurare la profondità di uno scavo", "Segnare linee dritte sui pavimenti"], correct: 1, expl: "Sfruttando la gravità, il peso appeso al filo indica l'esatta retta verticale." },
+        { id: 22, topic: "Manutenzione", text: "L'acronimo 'PVC' comunemente usato per tubazioni di scarico o infissi sta per:", options: ["Polivinilcloruro (Cloruro di polivinile)", "Polietilene ad alta densità", "Policarbonato verniciato", "Poliuretano vulcanizzato"], correct: 0, expl: "Il PVC è un materiale plastico estremamente diffuso in edilizia per la sua resistenza e versatilità." },
+        { id: 23, topic: "Manutenzione", text: "In ambito elettrico, l'unità di misura della 'potenza' è:", options: ["Il Volt (V)", "L'Ampere (A)", "Il Watt (W)", "L'Ohm (Ω)"], correct: 2, expl: "Volt = Tensione; Ampere = Corrente; Ohm = Resistenza; Watt = Potenza (W = V x A)." },
+        { id: 24, topic: "Manutenzione", text: "Nella lavorazione del legno, per incollare due pezzi in modo permanente (es. incastri a coda di rondine), si predilige l'uso di:", options: ["Silicone neutro", "Colla vinilica (PVA)", "Mastice per guarnizioni", "Colla cianoacrilica (Attak)"], correct: 1, expl: "La colla vinilica per legno penetra nelle porosità delle fibre creando un legame meccanico fortissimo." },
+        { id: 25, topic: "Manutenzione", text: "Se si deve tinteggiare il soffitto di un bagno cieco soggetto a forti vapori, quale tipo di idropittura è più indicato?", options: ["Smalto acrilico lucido", "Idropittura superlavabile al quarzo", "Idropittura traspirante e antimuffa", "Pittura a calce per esterni"], correct: 2, expl: "La pittura traspirante evita la formazione di condensa superficiale, prevenendo lo sfogliamento e le muffe nei locali umidi." },
+        { id: 26, topic: "Manutenzione", text: "In falegnameria, per arrotondare gli spigoli di un asse o creare modanature decorative, l'utensile elettrico d'elezione è:", options: ["La fresatrice verticale (o toupie)", "La pialla a filo", "La levigatrice a nastro", "Il trapano battente"], correct: 0, expl: "La fresatrice, tramite frese sagomate rotanti ad alta velocità, scava, modana e rifinisce i bordi del legno." },
+        { id: 27, topic: "Manutenzione", text: "In una tubazione idraulica di scarico, le pendenze devono essere calcolate con cura per:", options: ["Evitare che l'acqua defluisca troppo velocemente lasciando depositati i detriti solidi (solitamente pendenza tra 1% e 2%)", "Raggiungere la massima velocità possibile", "Aumentare la pressione del getto", "Evitare l'uso di raccordi a gomito"], correct: 0, expl: "Una pendenza ottimale dell'1-2% garantisce che i liquidi trascinino con sé i solidi, prevenendo intasamenti." },
+        { id: 28, topic: "Manutenzione", text: "Qual è lo scopo del 'cercafase'?", options: ["Individuare tubi dell'acqua nel muro", "Rilevare la presenza di tensione elettrica di fase (230V) su un conduttore o un morsetto", "Misurare la lunghezza dei cavi elettrici", "Spelare i fili elettrici"], correct: 1, expl: "Il cercafase è un cacciavite con una piccola lampadina al neon che si accende se la punta tocca il cavo di fase (sotto tensione) e l'operatore tocca il contatto metallico posteriore." },
+        { id: 29, topic: "Manutenzione", text: "Cosa si intende per 'cartongesso'?", options: ["Lastre di gesso compattato ad altissima densità per pavimenti", "Pannelli costituiti da un nucleo di gesso trattato racchiuso tra due fogli di speciale cartone resistente, usati per controsoffitti e pareti leggere", "Intonaco a base di gesso spatolato a mano", "Un materiale isolante per esterni"], correct: 1, expl: "Il cartongesso è il principale materiale dell'edilizia leggera, veloce da posare e facile da rifinire." },
+        { id: 30, topic: "Manutenzione", text: "Quale chiave fissa è dotata di un meccanismo interno che permette di svitare o avvitare un dado senza staccare l'attrezzo a ogni giro?", options: ["Chiave a forchetta", "Chiave inglese a rullino", "Chiave a cricchetto (o a snodo reversibile)", "Chiave a brugola (Allen)"], correct: 2, expl: "Il cricchetto permette il movimento continuo in una sola direzione, velocizzando notevolmente il lavoro in spazi stretti." },
+
+        // 2. Sicurezza nei luoghi di lavoro (D.Lgs. 81/08) - 30 Domande
+        { id: 31, topic: "Sicurezza", text: "Ai sensi dell'art. 17 del D.Lgs. 81/08, quali sono gli obblighi NON delegabili del Datore di Lavoro?", options: ["La designazione degli addetti antincendio e la nomina del Medico Competente", "La valutazione di tutti i rischi (redazione DVR) e la designazione del Responsabile del Servizio di Prevenzione e Protezione (RSPP)", "L'informazione e la formazione dei lavoratori", "L'acquisto dei DPI e la manutenzione dei macchinari"], correct: 1, expl: "L'art. 17 indica tassativamente come indelegabili la Valutazione dei Rischi e la nomina del RSPP." },
+        { id: 32, topic: "Sicurezza", text: "L'acronimo RLS, previsto dal T.U. Sicurezza, sta per:", options: ["Responsabile Lavoratori Sicurezza", "Rappresentante dei Lavoratori per la Sicurezza", "Referente Locale per la Sicurezza", "Responsabile del Servizio Protezione"], correct: 1, expl: "Il Rappresentante dei Lavoratori per la Sicurezza è eletto o designato per rappresentare i lavoratori sugli aspetti della salute e sicurezza." },
+        { id: 33, topic: "Sicurezza", text: "In base al D.Lgs. 81/08, la 'sorveglianza sanitaria' (visite mediche) deve essere effettuata dal Medico Competente:", options: ["A spese dell'INAIL", "A spese del lavoratore, che può richiedere il rimborso", "A spese del Datore di Lavoro", "Esclusivamente presso strutture pubbliche (ASL)"], correct: 2, expl: "L'art. 41 stabilisce che tutti gli oneri economici relativi alla sorveglianza sanitaria sono a carico del datore di lavoro." },
+        { id: 34, topic: "Sicurezza", text: "Cosa valuta il DUVRI?", options: ["I rischi da radiazioni ottiche artificiali", "I rischi propri dell'azienda verso i suoi dipendenti", "I rischi derivanti dalle interferenze delle lavorazioni in caso di affidamento di lavori in appalto o contratto d'opera", "Il rischio incendio nelle scuole"], correct: 2, expl: "Il Documento Unico di Valutazione dei Rischi da Interferenze serve a coordinare la sicurezza tra l'azienda committente e le imprese appaltatrici esterne." },
+        { id: 35, topic: "Sicurezza", text: "Nel D.Lgs. 81/08, chi è il 'Preposto'?", options: ["Persona che, in ragione delle competenze professionali, sovrintende all'attività lavorativa e garantisce l'attuazione delle direttive ricevute", "Il professionista esterno che redige il DVR", "L'addetto esclusivamente alle pulizie dei locali", "Il delegato sindacale territoriale"], correct: 0, expl: "Il preposto (es. capoufficio, caposquadra) vigila sulla corretta esecuzione del lavoro e sul rispetto delle norme di sicurezza da parte dei lavoratori." },
+        { id: 36, topic: "Sicurezza", text: "Nelle aziende pubbliche o private, fino a quanti lavoratori è consentito al Datore di Lavoro svolgere direttamente i compiti del Servizio di Prevenzione e Protezione (RSPP), previa frequentazione di specifici corsi?", options: ["Fino a 10 lavoratori", "Fino a 15 lavoratori", "Fino a 30 lavoratori, e in alcuni settori (es. artigianato, agricoltura) anche fino a 30 o 50", "In nessun caso, è sempre vietato"], correct: 2, expl: "L'art. 34 stabilisce i casi in cui il datore di lavoro può svolgere direttamente l'incarico di RSPP (in genere aziende industriali/artigiane fino a 30 addetti, agricole fino a 10, uffici fino a 200)." },
+        { id: 37, topic: "Sicurezza", text: "Qual è il limite di validità temporale del Documento di Valutazione dei Rischi (DVR)?", options: ["1 anno", "3 anni", "5 anni", "Non ha una scadenza fissa, ma deve essere immediatamente rielaborato in caso di modifiche del processo produttivo, infortuni significativi o aggiornamenti normativi"], correct: 3, expl: "L'art. 29 c. 3 impone la rielaborazione del DVR in occasione di modifiche del processo produttivo o dell'organizzazione del lavoro, o in caso di infortuni gravi." },
+        { id: 38, topic: "Sicurezza", text: "Un lavoratore può rifiutarsi di utilizzare i Dispositivi di Protezione Individuale (DPI) forniti dal Datore di Lavoro se li ritiene scomodi?", options: ["Sì, previa comunicazione scritta all'RLS", "No, l'uso dei DPI messi a disposizione è un obbligo di legge sanzionabile disciplinarmente e penalmente", "Sì, se ha maturato 10 anni di anzianità", "Solo in caso di caldo eccessivo"], correct: 1, expl: "L'art. 20 (Obblighi dei lavoratori) impone l'obbligo di utilizzare correttamente le attrezzature e i DPI, pena sanzioni." },
+        { id: 39, topic: "Sicurezza", text: "Quale figura professionale effettua il 'giudizio di idoneità alla mansione specifica' del lavoratore?", options: ["Il Medico di base (medico di famiglia)", "Il Medico Competente", "L'Ispettore dell'ASL", "Il Datore di Lavoro"], correct: 1, expl: "Il Medico Competente rilascia il certificato di idoneità (piena, parziale, o inidoneità) in esito alla sorveglianza sanitaria." },
+        { id: 40, topic: "Sicurezza", text: "Nelle PA e aziende con più di 15 lavoratori, chi partecipa obbligatoriamente alla 'Riunione Periodica' (Art. 35)?", options: ["Datore di lavoro, RSPP, Medico Competente, RLS", "Solo Datore di lavoro e Sindacato", "Tutti i dipendenti in assemblea plenaria", "Il Sindaco, il Prefetto e il Comandante dei Vigili del Fuoco"], correct: 0, expl: "La riunione, indetta almeno una volta l'anno, coinvolge le figure cardine del sistema di prevenzione aziendale." },
+        { id: 41, topic: "Sicurezza", text: "Quale cartello di sicurezza è caratterizzato da forma triangolare, fondo giallo, bordi neri e pittogramma nero?", options: ["Divieto", "Salvataggio e soccorso", "Prescrizione (obbligo)", "Avvertimento (Pericolo)"], correct: 3, expl: "I cartelli gialli triangolari indicano attenzione/pericolo (es. Pericolo elettrico, sostanze infiammabili)." },
+        { id: 42, topic: "Sicurezza", text: "Per 'Movimentazione Manuale dei Carichi' (MMC) che comportano rischi dorso-lombari si intende:", options: ["Solo il sollevamento pesi in palestra", "L'uso di carrelli elevatori (muletti)", "Le operazioni di trasporto o sostegno di un carico ad opera di uno o più lavoratori (sollevare, deporre, spingere, tirare, portare)", "Lo spostamento di documenti cartacei sulle scrivanie"], correct: 2, expl: "Definizione tratta dal Titolo VI del D.Lgs. 81/08. Valuta i rischi biomeccanici." },
+        { id: 43, topic: "Sicurezza", text: "A norma dell'art. 44 del T.U., in caso di pericolo grave, immediato e inevitabile, il lavoratore che si allontana dal posto di lavoro:", options: ["Perde la retribuzione per le ore non lavorate", "Non può subire pregiudizio alcuno e deve essere protetto da qualsiasi conseguenza dannosa", "Può essere licenziato per giusta causa", "Deve risarcire il danno fermo macchina all'azienda"], correct: 1, expl: "La legge tutela l'istinto di sopravvivenza e il diritto di porsi in salvo in emergenza, vietando ritorsioni." },
+        { id: 44, topic: "Sicurezza", text: "Il lavoratore 'addetto ai videoterminali' è colui che utilizza un'attrezzatura munita di videoterminali per:", options: ["Almeno 5 ore alla settimana", "Almeno 20 ore settimanali, dedotte le interruzioni", "Qualsiasi quantità di tempo documentabile", "Almeno 38 ore settimanali in modo continuativo"], correct: 1, expl: "Ai sensi dell'art. 173, si è classificati 'videoterminalisti' (con conseguente diritto a pause e visite oculistiche) se si supera la soglia delle 20 ore/settimana." },
+        { id: 45, topic: "Sicurezza", text: "L'uso di Dispositivi di Protezione Individuale (DPI) è prioritario rispetto alle misure di protezione collettiva?", options: ["Sì, sempre", "No, i DPI devono essere impiegati solo quando i rischi non possono essere evitati o sufficientemente ridotti da misure tecniche di prevenzione o mezzi di protezione collettiva", "Solo nei cantieri edili", "La scelta è lasciata alla discrezione del lavoratore"], correct: 1, expl: "La norma stabilisce la priorità delle misure di protezione collettiva (es. parapetto, aspiratore) rispetto ai DPI (es. imbracatura, mascherina)." },
+        { id: 46, topic: "Sicurezza", text: "In tema di primo soccorso, la classificazione delle aziende in gruppi (A, B, C) per determinare le dotazioni minime (cassetta o pacchetto) dipende da:", options: ["Fatturato annuo dell'azienda", "Indice di infortuni INAIL, natura dell'attività e numero dei lavoratori", "Anno di fondazione dell'azienda", "Esclusivamente dal numero di donne impiegate"], correct: 1, expl: "Il DM 388/2003 classifica le aziende in base all'indice di rischio (tariffa INAIL) e alle dimensioni per calibrare il sistema di soccorso." },
+        { id: 47, topic: "Sicurezza", text: "La delega di funzioni in materia di salute e sicurezza (art. 16) da parte del Datore di Lavoro è ammessa a quali condizioni formali?", options: ["Atto scritto avente data certa e attribuzione al delegato dei necessari poteri di spesa", "Basta una stretta di mano davanti all'RLS", "Può essere inserita come clausola tacita nel contratto", "Solo previa approvazione dell'ASL competente"], correct: 0, expl: "La delega per essere valida deve essere scritta (data certa), il delegato deve avere requisiti professionali e piena autonomia di spesa e decisione." },
+        { id: 48, topic: "Sicurezza", text: "Riguardo le lavoratrici madri (D.Lgs. 151/01), il lavoro notturno (dalle 24.00 alle 6.00):", options: ["È facoltativo", "È vietato dall'accertamento dello stato di gravidanza fino al compimento di 1 anno di età del bambino", "È consentito con un'indennità del +50%", "È vietato solo se la lavoratrice svolge lavori manuali"], correct: 1, expl: "Il divieto di lavoro notturno è assoluto a tutela della salute della madre e del nascituro/neonato." },
+        { id: 49, topic: "Sicurezza", text: "Chi è il responsabile penalmente per la mancata formazione sulla sicurezza dei lavoratori?", options: ["Il Medico Competente", "L'ente di formazione", "Il Datore di Lavoro", "Il lavoratore stesso"], correct: 2, expl: "Il Datore di Lavoro ha l'obbligo penale (art. 37) di assicurare un'adeguata e specifica formazione sulla salute e sicurezza a ciascun lavoratore." },
+        { id: 50, topic: "Sicurezza", text: "Il limite di azione inferiore per l'esposizione al rumore, superato il quale il datore deve mettere a disposizione i DPI uditivi (inserti, cuffie), è:", options: ["70 dB(A)", "80 dB(A)", "85 dB(A)", "90 dB(A)"], correct: 1, expl: "A 80 dB(A) c'è l'obbligo di mettere a disposizione i DPI (l'uso non è obbligatorio). A 85 dB(A) l'uso dei DPI diventa obbligatorio." },
+        { id: 51, topic: "Sicurezza", text: "Qual è il colore della segnaletica che prescrive un obbligo (es. 'Obbligo uso guanti')?", options: ["Rosso con scritte bianche", "Azzurro con pittogramma bianco", "Verde", "Giallo con bordo nero"], correct: 1, expl: "I cartelli di prescrizione (obbligo) sono circolari, con fondo azzurro e simbolo bianco." },
+        { id: 52, topic: "Sicurezza", text: "I DPI di 'terza categoria' (III categoria) sono progettati per proteggere da:", options: ["Lesioni superficiali (rischi minori)", "Rischi di morte o lesioni gravi e di carattere permanente (es. cadute dall'alto)", "Solo dal freddo (fino a -5°C)", "Rumori di bassa intensità"], correct: 1, expl: "I DPI di III categoria (salvavita) richiedono un addestramento obbligatorio da parte del datore di lavoro." },
+        { id: 53, topic: "Sicurezza", text: "Come si definisce un 'Quasi Infortunio' (Near Miss) nella gestione della sicurezza?", options: ["Un infortunio con meno di 3 giorni di prognosi", "Un infortunio simulato dal dipendente per frodare l'INAIL", "Un evento non pianificato che avrebbe potuto causare un danno a persone o cose, ma non lo ha fatto per circostanze fortuite", "Un infortunio avvenuto durante il tragitto casa-lavoro"], correct: 2, expl: "L'analisi dei 'mancati infortuni' è fondamentale per prevenire che, ripetendosi, causino danni reali in futuro." },
+        { id: 54, topic: "Sicurezza", text: "Il lavoratore ha l'obbligo di segnalare immediatamente al datore di lavoro o al preposto eventuali carenze dei dispositivi di sicurezza?", options: ["No, deve prima ripararli da solo", "Sì, è un preciso obbligo di legge", "Solo se fa parte del Sindacato", "Sì, ma solo alla fine del turno lavorativo"], correct: 1, expl: "L'art. 20 lettera 'e' impone al lavoratore di segnalare immediatamente le deficienze dei mezzi e dei DPI, nonché qualsiasi condizione di pericolo." },
+        { id: 55, topic: "Sicurezza", text: "Cosa si intende per rischio 'Ergonomico'?", options: ["Rischio derivante dall'uso di sostanze chimiche", "Rischio legato al non corretto adattamento del posto di lavoro e delle attrezzature alle caratteristiche psicofisiche del lavoratore (posture incongrue, sforzi ripetuti)", "Rischio di natura elettrica in ufficio", "Rischio di stress termico in cantiere"], correct: 1, expl: "L'ergonomia studia l'interazione tra uomo e ambiente di lavoro, per prevenire patologie muscolo-scheletriche e visive." },
+        { id: 56, topic: "Sicurezza", text: "Gli addetti antincendio e di primo soccorso possono rifiutare la designazione da parte del Datore di Lavoro?", options: ["Sì, sempre e senza giustificazione", "No, se non per giustificato motivo (es. motivi di salute documentati)", "Sì, basta non presentarsi al corso", "Solo se l'azienda ha più di 50 dipendenti"], correct: 1, expl: "La nomina ad addetto emergenze non può essere rifiutata se non per comprovati e giustificati motivi di salute o incompatibilità (art. 43)." },
+        { id: 57, topic: "Sicurezza", text: "Il Rappresentante dei Lavoratori per la Sicurezza (RLS) ha accesso al Documento di Valutazione dei Rischi (DVR)?", options: ["Sì, per l'espletamento della sua funzione, ricevendone tempestivamente copia previa richiesta", "No, è un documento riservato aziendale", "Solo in caso di infortunio mortale", "Solo tramite l'autorizzazione dell'Ispettorato del Lavoro"], correct: 0, expl: "L'art. 50 garantisce all'RLS l'accesso al DVR e ai dati relativi agli infortuni aziendali." },
+        { id: 58, topic: "Sicurezza", text: "Nell'organizzazione delle pause per i videoterminalisti (D.Lgs. 81/08 art. 175), qual è la regola base in assenza di contratto collettivo?", options: ["10 minuti di pausa ogni 3 ore", "15 minuti di pausa ogni 120 minuti di applicazione continuativa al videoterminale", "30 minuti di pausa ogni 4 ore", "Nessuna pausa se si usano filtri antiriflesso"], correct: 1, expl: "Il lavoratore ha diritto a 15 minuti di interruzione o cambio mansione (che non comporti l'uso del video) ogni due ore." },
+        { id: 59, topic: "Sicurezza", text: "A cosa si riferisce il rischio 'Biologico' sul posto di lavoro (Titolo X)?", options: ["Esclusivamente al rischio di essere morsi da animali", "Esposizione a microrganismi, tossine, colture cellulari o endoparassiti umani che possono provocare infezioni, allergie o intossicazioni", "Rischio derivante da polveri sottili (smog)", "Uso di detersivi biologici non chimici"], correct: 1, expl: "Il rischio biologico interessa ospedali, laboratori, smaltimento rifiuti, agricoltura e settori a contatto con fluidi/agenti infettivi." },
+        { id: 60, topic: "Sicurezza", text: "Ai fini della normativa sulla sicurezza, gli stagisti, gli allievi di scuole in laboratori e i lavoratori somministrati (interinali) sono equiparati a:", options: ["Visitatori esterni", "Clienti", "Lavoratori subordinati a tutti gli effetti, godendo delle stesse tutele", "Lavoratori autonomi"], correct: 2, expl: "L'art. 2 equipara alla figura del 'Lavoratore' chiunque svolga attività lavorativa (anche senza retribuzione e per apprendimento) nell'organizzazione del datore." },
+
+        // 3. Informatica e Posta Elettronica - 30 Domande
+        { id: 61, topic: "Informatica", text: "Ai sensi del Codice dell'Amministrazione Digitale (CAD), cosa garantisce la Posta Elettronica Certificata (PEC)?", options: ["La protezione assoluta contro tutti i virus informatici", "La certezza della data, dell'ora e dell'identità del mittente, con validità legale equiparata a una raccomandata A/R", "L'invio gratuito di email in tutto il mondo", "La traduzione automatica dei messaggi istituzionali"], correct: 1, expl: "La PEC certifica legalmente (fornendo ricevute di accettazione e consegna) l'invio e la ricezione di un documento informatico." },
+        { id: 62, topic: "Informatica", text: "Qual è la caratteristica fondamentale della Firma Digitale in Italia?", options: ["È l'immagine scansionata della propria firma autografa inserita in un documento Word", "È una firma elettronica qualificata basata su crittografia asimmetrica che garantisce autenticità, integrità e non ripudio del documento", "È una password inserita per sbloccare il PC", "È il timbro a secco del Comune applicato su carta"], correct: 1, expl: "La Firma Digitale attribuisce piena validità legale al documento informatico, dimostrando in modo inequivocabile chi l'ha firmato e che non è stato alterato." },
+        { id: 63, topic: "Informatica", text: "Cosa si intende con l'acronimo SPID?", options: ["Sistema di Protezione Informatica e Dati", "Sistema Pubblico di Identità Digitale", "Servizio Postale Internazionale per Documenti", "Servizio Pubblico per Interventi Diretti"], correct: 1, expl: "Lo SPID permette l'accesso sicuro e univoco a tutti i servizi online della PA con un solo set di credenziali (username e password)." },
+        { id: 64, topic: "Informatica", text: "In un'e-mail, qual è la funzione del campo 'CCN' (Copia Conoscenza Nascosta) o 'Bcc'?", options: ["Permette di criptare il contenuto del messaggio", "Nasconde il mittente principale dell'email", "Permette di inviare l'email a più destinatari senza che questi possano vedere gli indirizzi mail degli altri destinatari in CCN", "Invia l'email con priorità altissima"], correct: 2, expl: "Usare il CCN è fondamentale per la privacy quando si inviano mail massive o circolari a persone esterne all'Ente." },
+        { id: 65, topic: "Informatica", text: "Quale tra le seguenti è una tecnica fraudolenta utilizzata su Internet per carpire dati sensibili (password, carte di credito) inviando email contraffatte che sembrano provenire da enti affidabili?", options: ["Defacing", "Phishing", "Spamming", "Cookies"], correct: 1, expl: "Il Phishing (pescare) inganna l'utente inducendolo a cliccare su link malevoli e a inserire le proprie credenziali su siti clone." },
+        { id: 66, topic: "Informatica", text: "In Microsoft Word, per forzare l'inizio di una nuova pagina senza dover premere ripetutamente il tasto 'Invio', si inserisce:", options: ["Un'interruzione di colonna", "Un'interruzione di riga morbida (Shift+Enter)", "Un'interruzione di pagina (Ctrl+Enter)", "Un'intestazione a piè di pagina"], correct: 2, expl: "L'interruzione di pagina permette una formattazione pulita: il testo successivo inizierà sempre all'inizio della pagina seguente." },
+        { id: 67, topic: "Informatica", text: "Nel formato standard di un indirizzo email istituzionale (es. nome.cognome@comune.citta.it), il carattere '@' (chiocciola) cosa separa?", options: ["Il nome della persona dalla password", "Il nome utente (mailbox) dal nome del dominio del server di posta", "Il protocollo web dal paese di appartenenza", "Le lettere dalle cifre numeriche"], correct: 1, expl: "La chiocciola significa 'at' (presso): indica che l'utente 'nome.cognome' risiede 'presso' il dominio 'comune.citta.it'." },
+        { id: 68, topic: "Informatica", text: "Un file con estensione '.pdf' (Portable Document Format) ha il vantaggio principale di:", options: ["Mantenere inalterata l'impaginazione e la formattazione grafica indipendentemente dal dispositivo o dal sistema operativo usato per aprirlo", "Essere sempre modificabile da chiunque senza password", "Contenere esclusivamente fogli di calcolo", "Ottenere file di dimensioni superiori a 1 Gigabyte"], correct: 0, expl: "Il PDF è lo standard di elezione nella PA per la pubblicazione di bandi e graduatorie, proprio perché non 'sballa' i margini o i font." },
+        { id: 69, topic: "Informatica", text: "Cosa fa un 'Ransomware' se infetta il computer di un ufficio comunale?", options: ["Cripta i file del computer (o dei server di rete) rendendoli inaccessibili e chiede il pagamento di un riscatto per decriptarli", "Spegne il monitor ogni 10 minuti", "Rallenta la connessione a Internet inviando spam", "Corregge automaticamente gli errori di grammatica nei testi"], correct: 0, expl: "Il Ransomware è una delle minacce più gravi per gli Enti Locali, capace di paralizzare l'intera amministrazione crittografando i database." },
+        { id: 70, topic: "Informatica", text: "In informatica, la memoria RAM (Random Access Memory) è:", options: ["Una memoria di massa (come l'Hard Disk) per salvare i file per anni", "La memoria volatile di lavoro, che contiene i dati e i programmi in esecuzione e si svuota quando il PC viene spento", "Il processore grafico del computer", "Il masterizzatore di DVD"], correct: 1, expl: "La RAM è essenziale per la velocità del PC: più app sono aperte, più RAM viene occupata. Spegnendo la macchina, i dati non salvati sul disco fisso vanno persi." },
+        { id: 71, topic: "Informatica", text: "Come si definisce una rete informatica 'Intranet' nella Pubblica Amministrazione?", options: ["La rete Wi-Fi pubblica in piazza accessibile ai cittadini", "Una rete informatica privata aziendale basata sui protocolli internet, accessibile solo al personale autorizzato per la condivisione di risorse interne", "Il servizio di cloud pubblico di Google", "Una rete che non ha bisogno di cavi di rete o antenne"], correct: 1, expl: "La Intranet aziendale pubblica le circolari interne, i modelli ferie e i servizi riservati ai soli dipendenti (spesso protetta da login)." },
+        { id: 72, topic: "Informatica", text: "In Microsoft Excel, quale combinazione di comandi è necessaria per indicare a una cella di eseguire un calcolo (es. una somma tra A1 e B1)?", options: ["#SOMMA A1+B1", "SUM[A1,B1]", "=A1+B1 (iniziare sempre col simbolo uguale)", "Calcola: A1, B1"], correct: 2, expl: "Qualsiasi formula matematica o richiamo a funzione in Excel DEVE obbligatoriamente iniziare col carattere '=' (uguale)." },
+        { id: 73, topic: "Informatica", text: "Cosa è un 'Firewall' in una rete informatica aziendale?", options: ["Un programma che elimina i file obsoleti", "Un dispositivo di sicurezza (hardware o software) che filtra il traffico di rete in entrata e in uscita, bloccando accessi non autorizzati", "Un sistema automatico di spegnimento antincendio della sala CED", "L'antenna del router Wi-Fi"], correct: 1, expl: "Il firewall ('muro di fuoco') agisce come un 'buttafuori' della rete informatica, controllando chi e cosa può entrare o uscire." },
+        { id: 74, topic: "Informatica", text: "Quale tra le seguenti estensioni di file rappresenta tipicamente un archivio compresso?", options: [".docx", ".jpg", ".zip (o .rar, .7z)", ".exe"], correct: 2, expl: "Gli archivi compressi permettono di raggruppare più file in un unico 'pacchetto' riducendone anche il peso in byte, utile per gli allegati email." },
+        { id: 75, topic: "Informatica", text: "L'acronimo 'URL' (Uniform Resource Locator) indica comunemente:", options: ["La marca del monitor", "Il protocollo di cifratura della posta elettronica", "L'indirizzo web univoco digitato nella barra del browser per raggiungere una specifica pagina Internet (es. https://www.inps.it)", "Un componente hardware della scheda madre"], correct: 2, expl: "L'URL è l'indirizzo testuale che permette ai browser di localizzare i documenti sul World Wide Web." },
+        { id: 76, topic: "Informatica", text: "Nel contesto di internet, cosa è un 'Web Browser'?", options: ["Il motore di ricerca per trovare siti (es. Google, Bing)", "L'applicazione software che consente di navigare e visualizzare le pagine web (es. Chrome, Edge, Firefox, Safari)", "L'azienda che fornisce la connessione (es. TIM, Vodafone)", "Il server fisico che ospita i siti web"], correct: 1, expl: "Da non confondere con il 'motore di ricerca' (il sito web usato per cercare informazioni). Il browser è il programma installato sul PC." },
+        { id: 77, topic: "Informatica", text: "La CIE, ampiamente diffusa come strumento di identità digitale in Italia assieme allo SPID, cos'è?", options: ["Carta Identità Elettronica", "Codice Informatico Enti", "Certificato Interno Elettorale", "Carta Informatica Europea"], correct: 0, expl: "La Carta d'Identità Elettronica, dotata di microchip NFC, permette l'accesso ai portali della PA tramite smartphone o lettore smartcard." },
+        { id: 78, topic: "Informatica", text: "In videoscrittura (Word), l'allineamento del paragrafo detto 'Giustificato' produce quale effetto?", options: ["Centra perfettamente ogni riga rispetto alla pagina", "Allinea il testo in modo irregolare (a bandiera)", "Allinea il testo contemporaneamente sia al margine sinistro che al margine destro, distribuendo la spaziatura tra le parole", "Crea un elenco puntato"], correct: 2, expl: "Il testo giustificato (tipico di libri e atti formali) appare come un blocco ordinato con margini dritti su ambo i lati." },
+        { id: 79, topic: "Informatica", text: "Qual è la scorciatoia da tastiera standard nei sistemi Windows per l'azione di 'Incolla' (Paste)?", options: ["Ctrl + C", "Ctrl + X", "Ctrl + V", "Ctrl + P"], correct: 2, expl: "C = Copia, X = Taglia, V = Incolla, P = Stampa, Z = Annulla, S = Salva." },
+        { id: 80, topic: "Informatica", text: "Quale dispositivo hardware agisce da 'cervello' elaborando tutte le istruzioni informatiche del PC?", options: ["L'Hard Disk Drive (HDD)", "La Scheda Video (GPU)", "Il Processore Centrale (CPU)", "L'Alimentatore"], correct: 2, expl: "La Central Processing Unit (CPU) esegue i calcoli logici e matematici dei programmi." },
+        { id: 81, topic: "Informatica", text: "Nell'utilizzo della Posta Elettronica, qual è la netta differenza tra l'opzione 'Rispondi' (Reply) e 'Rispondi a tutti' (Reply to All)?", options: ["Nessuna, sono pulsanti ridondanti", "'Rispondi' invia la replica al solo mittente originale; 'Rispondi a tutti' la invia al mittente originale E a tutti gli altri indirizzi presenti nei campi A e CC", "'Rispondi a tutti' pubblica l'email su Internet", "'Rispondi' non permette di inserire allegati"], correct: 1, expl: "Usare 'Rispondi a tutti' assicura che un intero gruppo di lavoro continui a essere aggiornato sull'evoluzione della comunicazione." },
+        { id: 82, topic: "Informatica", text: "L'operazione periodica di 'Backup' aziendale ha lo scopo principale di:", options: ["Formattare i computer lenti", "Eseguire copie di sicurezza dei dati per prevenirne la perdita definitiva in caso di guasti hardware o attacchi ransomware", "Aggiornare l'antivirus", "De-frammentare il disco fisso"], correct: 1, expl: "Il backup (spesso memorizzato in cloud, NAS o su nastri) è l'unica ancora di salvezza in caso di disastri informatici." },
+        { id: 83, topic: "Informatica", text: "Nel sistema operativo Windows, cosa accade se si trascina un file tenendo premuto il tasto 'Maiusc' (Shift) in una cartella diversa dello stesso disco?", options: ["Il file viene copiato", "Il file viene Spostato (tagliato e incollato)", "Si crea un collegamento (Shortcut)", "Il file viene rinominato in maiuscolo"], correct: 1, expl: "Generalmente in Windows trascinare (drag&drop) su stesso disco 'sposta'; trascinare su disco diverso 'copia'. Tenendo premuto Shift si forza sempre lo spostamento." },
+        { id: 84, topic: "Informatica", text: "In Excel, per bloccare (fissare) la prima riga di un foglio di calcolo in modo che resti sempre visibile mentre si scorre verso il basso con la rotellina, quale funzione si utilizza?", options: ["Unisci e centra", "Blocca Riquadri (Visualizza > Blocca riga superiore)", "Filtro avanzato", "Nascondi righe"], correct: 1, expl: "Il blocco dei riquadri è indispensabile per gestire tabelle con centinaia di record, mantenendo l'intestazione delle colonne sempre in vista." },
+        { id: 85, topic: "Informatica", text: "Qual è il formato (estensione) di un documento creato con le versioni moderne di Microsoft Word?", options: [".txt", ".xls", ".docx", ".exe"], correct: 2, expl: ".docx (introdotto da Office 2007) ha sostituito il vecchio formato .doc." },
+        { id: 86, topic: "Informatica", text: "Cosa si intende per 'Cloud Computing' nella gestione dei dati della PA?", options: ["L'uso esclusivo di chiavette USB criptate", "L'archiviazione e l'elaborazione dei dati non in locale (sul PC del dipendente), ma su server remoti accessibili via Internet (es. infrastruttura Polo Strategico Nazionale)", "La gestione delle condizioni meteorologiche", "La stampa di documenti senza fili"], correct: 1, expl: "Il paradigma Cloud (Cloud First) è la direttiva principale per la digitalizzazione e messa in sicurezza dei dati pubblici (AgID)." },
+        { id: 87, topic: "Informatica", text: "Cosa distingue un software 'Open Source' (es. LibreOffice, Linux)?", options: ["È illegale nelle Pubbliche Amministrazioni", "Il codice sorgente è pubblico e accessibile; spesso il software è gratuito e modificabile dalla comunità", "È prodotto solo da Microsoft", "Scade sempre dopo 30 giorni (Shareware)"], correct: 1, expl: "Il software libero/Open Source promuove la condivisione della conoscenza. Il CAD incoraggia la PA a valutare soluzioni Open Source rispetto a quelle proprietarie (Art. 68)." },
+        { id: 88, topic: "Informatica", text: "Per l'erogazione di pagamenti elettronici verso le Pubbliche Amministrazioni, quale piattaforma nazionale unificata è obbligatorio utilizzare?", options: ["PayPal Pubblico", "PagoPA", "Bancomat Pay", "Postepay PA"], correct: 1, expl: "PagoPA è il sistema nazionale per i pagamenti a favore della Pubblica Amministrazione (es. multe, ticket, TARI), obbligatorio per gli Enti (Art. 5 CAD)." },
+        { id: 89, topic: "Informatica", text: "In Excel, se la formula è '=A1*$B$1' e la si copia nella cella sottostante, come si trasforma la formula?", options: ["=A2*$B$2", "=A1*$B$1", "=A2*$B$1", "=B1*$C$1"], correct: 2, expl: "I simboli '$' bloccano il riferimento di riga e colonna della cella B1 (riferimento assoluto). A1 (riferimento relativo) slitta e diventa A2." },
+        { id: 90, topic: "Informatica", text: "A cosa serve l'app nazionale 'IO'?", options: ["A chattare tra dipendenti comunali", "È l'applicazione unica per interagire in modo semplice e sicuro con i servizi pubblici locali e nazionali direttamente dallo smartphone", "A misurare la velocità di internet", "A inviare PEC gratuite"], correct: 1, expl: "L'App IO integra i servizi di vari Enti (notifiche, certificati, pagamenti PagoPA) in un unico canale per il cittadino." },
+
+        // 4. Codice di Comportamento dei Dipendenti Pubblici - 30 Domande
+        { id: 91, topic: "Codice Comportamento", text: "Secondo il D.P.R. 62/2013, il dipendente pubblico può accettare regali (o altre utilità) dai cittadini a titolo di ringraziamento per il lavoro svolto?", options: ["Sì, senza alcun limite di valore, essendo un gesto di cortesia", "No, in nessun caso", "No, salvo che si tratti di regali d'uso di modico valore (orientativamente non superiore a 150 euro) effettuati occasionalmente nelle normali relazioni di cortesia", "Sì, previa dichiarazione all'Agenzia delle Entrate"], correct: 2, expl: "La norma stabilisce il tetto orientativo di 150 euro, escludendo comunque i regali da chi vuole trarre vantaggi o ha procedimenti in corso con il dipendente." },
+        { id: 92, topic: "Codice Comportamento", text: "Nell'uso dei social media (Art. 11-ter introdotto dal DPR 81/2023), il dipendente pubblico è tenuto a:", options: ["Non usare alcun account social privato", "Evitare comportamenti e interventi che possano nuocere al prestigio, al decoro o all'immagine dell'amministrazione", "Pubblicare foto del proprio ufficio per favorire la trasparenza", "Promuovere le campagne politiche del Sindaco in carica"], correct: 1, expl: "La recente riforma impone forte cautela nell'esprimere opinioni sui social, vietando di screditare l'Ente e raccomandando di non usare mail istituzionali per registrarsi ai social (salvo scopi istituzionali)." },
+        { id: 93, topic: "Codice Comportamento", text: "In presenza di un 'conflitto di interessi', reale o potenziale, cosa DEVE fare immediatamente il dipendente pubblico?", options: ["Continuare la pratica con maggiore scrupolo per dimostrare la propria imparzialità", "Astenersi dal prendere decisioni o partecipare all'adozione delle stesse, informando per iscritto il proprio superiore gerarchico", "Risolvere il problema in autonomia confrontandosi col cittadino interessato", "Chiedere parere alla Corte dei Conti"], correct: 1, expl: "L'obbligo di astensione e comunicazione tempestiva al dirigente è il fulcro della prevenzione della corruzione (Art. 7 DPR 62/2013 e Art. 6-bis L. 241/90)." },
+        { id: 94, topic: "Codice Comportamento", text: "Il dipendente pubblico può utilizzare l'automobile di servizio o i computer dell'ufficio per ragioni personali?", options: ["Sì, al di fuori del normale orario lavorativo", "No, il materiale, i mezzi e i beni dell'Ente devono essere utilizzati esclusivamente per ragioni di ufficio", "Sì, se i dirigenti lo fanno", "Solo in caso di pioggia"], correct: 1, expl: "L'uso improprio di beni dell'ente configura un illecito disciplinare e talvolta penale (peculato d'uso)." },
+        { id: 95, topic: "Codice Comportamento", text: "Cosa si intende con il termine 'Whistleblowing' nel diritto pubblico?", options: ["Il licenziamento per giusta causa senza preavviso", "Un sistema normativo volto a tutelare da ritorsioni e discriminazioni il dipendente che segnali condotte illecite di cui sia venuto a conoscenza sul luogo di lavoro", "L'obbligo di timbrare il cartellino", "Il reato di false attestazioni della presenza"], correct: 1, expl: "L'ANAC e la normativa nazionale garantiscono l'anonimato e la tutela per il 'segnalante' di illeciti interni (L. 179/2017)." },
+        { id: 96, topic: "Codice Comportamento", text: "Oltre al Codice di Comportamento Nazionale (D.P.R. 62/2013), i Comuni devono adottare altri codici?", options: ["No, il codice nazionale assorbe ogni disciplina", "Sì, ogni Ente adotta il proprio 'Codice di Comportamento aziendale' (o integrativo), declinando e specificando le norme nazionali rispetto al proprio contesto (es. limiti ai regali più stringenti)", "Solo se superano i 100.000 abitanti", "Sì, ma solo per la Polizia Locale"], correct: 1, expl: "L'art. 54 del D.Lgs. 165/01 (Testo Unico Pubblico Impiego) obbliga ogni Amministrazione a redigere il proprio Codice di Comportamento." },
+        { id: 97, topic: "Codice Comportamento", text: "Cosa prescrive l'Art. 5 del DPR 62/2013 in merito all'adesione a partiti politici o associazioni sindacali?", options: ["Che deve essere comunicata al Dirigente entro 30 giorni", "Che il dipendente NON è tenuto a comunicarla (l'obbligo riguarda altre associazioni i cui interessi possano interferire con l'ufficio, ma sono espressamente esclusi partiti e sindacati)", "Che è vietata per i dipendenti degli enti locali", "Che garantisce una maggiorazione salariale"], correct: 1, expl: "Per tutelare la libertà costituzionale, partiti e sindacati sono esclusi dall'obbligo di comunicazione a cui soggiacciono invece altre associazioni (es. club esclusivi, massoneria)." },
+        { id: 98, topic: "Codice Comportamento", text: "Il fenomeno del 'Pantouflage' (o 'Revolving Doors' - porte girevoli) è vietato dalla legge. In cosa consiste?", options: ["Il divieto di trasferirsi temporaneamente in un altro ufficio del Comune", "Il divieto, per i dipendenti che hanno esercitato poteri negoziali o autoritativi nei confronti di soggetti privati, di svolgere attività lavorativa o professionale presso gli stessi nei 3 anni successivi alla cessazione del rapporto pubblico", "Il divieto di usare abbigliamento sportivo in ufficio", "L'obbligo di turnazione dei dirigenti"], correct: 1, expl: "È una misura anticorruzione ex Art. 53 co. 16-ter D.Lgs 165/01 per evitare scambi di favori 'posticipati' (es. favorisco un appalto per poi farmi assumere dalla ditta)." },
+        { id: 99, topic: "Codice Comportamento", text: "Se a un dipendente pubblico viene inflitta la sanzione del licenziamento disciplinare conseguente a falsa attestazione della presenza in servizio (c.d. furbetti del cartellino), a quale reato penale è tipicamente associata tale condotta?", options: ["Truffa aggravata ai danni dello Stato o dell'Ente Pubblico", "Furto", "Violenza privata", "Diffamazione"], correct: 0, expl: "Tale condotta (punita dall'Art. 55-quater del TUPI) porta al licenziamento disciplinare lampo e alla denuncia per truffa aggravata ai fini penali e per danno d'immagine contabile." },
+        { id: 100, topic: "Codice Comportamento", text: "Il dipendente pubblico può intrattenere relazioni dirette con gli organi di informazione (giornali, TV)?", options: ["Sì, in nome della trasparenza totale", "Sì, ma solo con pseudonimo", "No, salvo che vi sia stato espressamente incaricato dall'amministrazione (es. Ufficio Stampa)", "Sì, se iscritto all'ordine dei giornalisti pubblicisti"], correct: 2, expl: "L'art. 12 stabilisce che i rapporti con la stampa sono tenuti unicamente dai soggetti espressamente incaricati, garantendo un'informazione istituzionale coerente." },
+        { id: 101, topic: "Codice Comportamento", text: "L'obbligo di 'Tracciabilità' per il dipendente pubblico comporta:", options: ["Indossare un braccialetto elettronico Gps", "La documentazione adeguata, in via informatica o cartacea, di ogni passaggio procedimentale per consentirne la replicabilità e il controllo di trasparenza", "Registrare l'orario del caffè", "Firmare il registro presenze 4 volte al giorno"], correct: 1, expl: "Tracciabilità (Art. 9) significa che le motivazioni delle scelte amministrative devono risultare chiare dagli atti, per combattere opacità e corruzione." },
+        { id: 102, topic: "Codice Comportamento", text: "Un dipendente pubblico a tempo pieno può accettare l'incarico retribuito di amministratore di condominio del palazzo in cui NON vive?", options: ["Sì, liberamente e senza avvisare nessuno", "Sì, ma deve essere previamente e formalmente autorizzato dall'amministrazione di appartenenza per verificare l'assenza di conflitto di interessi", "No, l'attività extra è vietata in modo assoluto a tutti i dipendenti", "Sì, ma l'ente trattiene il 50% del compenso"], correct: 1, expl: "L'Art. 53 del TUPI (Incompatibilità e cumulo di impieghi) richiede autorizzazione preventiva per incarichi extra retribuiti; la mancata autorizzazione comporta sanzioni disciplinari e il versamento del compenso all'Ente." },
+        { id: 103, topic: "Codice Comportamento", text: "Nei rapporti con il pubblico, il dipendente (anche se opera al telefono o a sportello):", options: ["Ha diritto all'anonimato in virtù della privacy", "Deve operare con un cartellino identificativo visibile o dichiarare le proprie generalità in modo da farsi riconoscere", "Può declinare le proprie generalità solo alla Polizia Locale", "Fornisce solo il numero di matricola"], correct: 1, expl: "La riconoscibilità del dipendente verso il cittadino (Art. 12) è un principio base di responsabilizzazione." },
+        { id: 104, topic: "Codice Comportamento", text: "Un dipendente che riceve in ufficio un pacco contenente un tablet del valore di 600€ come 'regalo di Natale' da parte di un fornitore del Comune. Cosa deve fare secondo il Codice?", options: ["Rifiutarlo, o qualora fosse stato recapitato senza poterlo rifiutare, metterlo a disposizione dell'Amministrazione per la restituzione o devoluzione a fini istituzionali", "Donarlo in beneficenza alla Caritas locale in forma autonoma", "Accettarlo ma dichiararlo in sede di dichiarazione dei redditi", "Rivenderlo e versare il ricavato alla tesoreria comunale"], correct: 0, expl: "Il regalo supera ampiamente il modico valore ed è offerto da un fornitore (soggetto interessato): va rifiutato o devoluto ufficialmente tramite le procedure dell'Ente." },
+        { id: 105, topic: "Codice Comportamento", text: "Il dipendente in permesso retribuito ex Legge 104/92 per assistenza al familiare con grave disabilità, può impiegare le ore di permesso per svolgere commissioni o attività personali o ludiche senza collegamento con l'assistenza?", options: ["Sì, se il disabile sta dormendo", "Sì, purché rimanga nel territorio comunale", "No, l'utilizzo distorto del permesso integra la violazione del Codice, costituisce truffa e porta al licenziamento disciplinare", "Sì, se autorizzato dal dirigente"], correct: 2, expl: "La giurisprudenza della Cassazione è granitica: usare la L.104 per ferie o scopi personali lede la fiducia del datore di lavoro ed è frode all'INPS." },
+        { id: 106, topic: "Codice Comportamento", text: "Le previsioni del Piano Triennale di Prevenzione della Corruzione e Trasparenza (PTPCT):", options: ["Sono meri consigli teorici senza obbligatorietà per i dipendenti non dirigenziali", "Sono vincolanti per tutti i dipendenti, la cui inosservanza costituisce illecito disciplinare", "Si applicano solo ai Sindaci", "Sostituiscono in toto il Codice Penale"], correct: 1, expl: "Il Codice (Art. 3) stabilisce che il dipendente rispetta le misure necessarie alla prevenzione degli illeciti (L. 190/2012)." },
+        { id: 107, topic: "Codice Comportamento", text: "In relazione ai colleghi, l'uso di linguaggio offensivo, irrispettoso, minaccioso o l'atteggiamento aggressivo in ambito lavorativo, ai sensi dei CCNL del pubblico impiego:", options: ["È tollerato in un clima informale", "È sanzionato solo se avviene in presenza di pubblico esterno", "Costituisce sempre illecito disciplinare, in quanto il dipendente deve mantenere relazioni interpersonali corrette, garantendo un clima lavorativo sereno", "Comporta in automatico l'intervento delle forze dell'ordine"], correct: 2, expl: "Il Codice e i Contratti Collettivi impongono rapporti improntati a correttezza e reciproco rispetto tra tutti i dipendenti." },
+        { id: 108, topic: "Codice Comportamento", text: "Qual è l'organo interno competente ad irrogare sanzioni disciplinari superiori al semplice rimprovero verbale nel Comune?", options: ["Il Sindaco", "La Giunta", "L'Ufficio Procedimenti Disciplinari (UPD)", "Il Segretario Comunale in totale solitudine"], correct: 2, expl: "Il TUPI impone agli Enti Locali l'istituzione dell'UPD (Ufficio Procedimenti Disciplinari), spesso composto in via collegiale, per gestire i provvedimenti gravi." },
+        { id: 109, topic: "Codice Comportamento", text: "Il dipendente può delegare, senza l'autorizzazione del proprio dirigente, lo svolgimento delle proprie attività d'ufficio a colleghi o collaboratori esterni?", options: ["Sì, se il lavoro viene terminato prima della scadenza", "No, le incombenze spettano al dipendente, che non può ritardarle né delegarle a terzi senza formale autorizzazione del dirigente", "Sì, se paga di tasca propria l'eventuale esterno", "Solo per incarichi di scarso rilievo"], correct: 1, expl: "L'art. 11 vieta la delega abusiva e impone lo svolgimento tempestivo delle proprie incombenze." },
+        { id: 110, topic: "Codice Comportamento", text: "La violazione degli obblighi previsti dal Codice di Comportamento integra comportamenti contrari ai doveri d'ufficio e, come tale:", options: ["È fonte esclusiva di sanzioni penali (arresto)", "Comporta una multa da parte dell'Agenzia delle Entrate", "Comporta l'attivazione del procedimento disciplinare ed eventuali sanzioni (fino al licenziamento), oltre ad attivare profili di responsabilità civile, penale e contabile", "Non ha conseguenze formali, è un atto etico"], correct: 2, expl: "L'art. 16 specifica la pluralità delle responsabilità (Disciplinare, Amministrativa/Contabile, Penale, Civile)." },
+        { id: 111, topic: "Codice Comportamento", text: "Cosa deve fare il dipendente che, per ragioni d'ufficio, riceve informazioni e documenti che non sono di dominio pubblico?", options: ["Può pubblicarli sui propri social per promuovere trasparenza", "Deve usarli per avvantaggiare amici e parenti prima che la notizia diventi ufficiale", "È tenuto all'obbligo di riservatezza, e non può usarli a fini privati né trasmetterli a chi non ne abbia diritto (segreto d'ufficio)", "Può venderli se l'informazione ha un valore di mercato basso"], correct: 2, expl: "La violazione del segreto d'ufficio ha pesanti rilevanze penali e disciplinari, tutelando la privacy dei cittadini e i processi dell'Ente." },
+        { id: 112, topic: "Codice Comportamento", text: "Un dirigente o responsabile di ufficio ha particolari obblighi secondo il Codice?", options: ["No, gli obblighi sono uguali per tutti", "Sì, deve adottare un comportamento esemplare e imparziale, vigilare sull'operato dei dipendenti assegnati e ripartire i carichi di lavoro equamente", "Sì, ha l'obbligo di essere reperibile H24 tutti i giorni dell'anno", "L'unico obbligo aggiuntivo è il versamento di una quota associativa"], correct: 1, expl: "L'art. 13 declina doveri stringenti per la dirigenza: equità, controllo del benessere organizzativo, assegnazione chiara e imparziale dei compiti." },
+        { id: 113, topic: "Codice Comportamento", text: "Nel caso di stipula di contratti di appalto, fornitura o locazione (Art. 14 DPR 62/2013), il dipendente comunale può accettare l'assistenza di un intermediario o procacciatore (mediazione di terzi) per facilitare l'accordo con l'azienda fornitrice?", options: ["Sì, per rendere la procedura più snella e veloce", "Sì, ma solo se l'intermediario è un ex dipendente comunale (in pensione)", "No, il dipendente non deve ricorrere a mediazione di terzi né corrispondere (o accettare) alcuna utilità per la conclusione del contratto pubblico", "Sì, a condizione che l'intermediario non richieda percentuali superiori al 5%"], correct: 2, expl: "La norma mira a sventare il malaffare e il traffico di influenze illecite nei processi di approvvigionamento dell'Ente (Gare, affidamenti diretti)." },
+        { id: 114, topic: "Codice Comportamento", text: "Quale organo nazionale sovraintende al rispetto delle norme in materia di anticorruzione e trasparenza nelle Pubbliche Amministrazioni?", options: ["L'ISTAT (Istituto Nazionale di Statistica)", "L'ANCI (Associazione Nazionale Comuni Italiani)", "L'ANAC (Autorità Nazionale Anticorruzione)", "Il CIPE"], correct: 2, expl: "L'ANAC riceve i piani triennali (PTPCT), vigila sui contratti pubblici e fornisce le linee guida a cui si uniformano le PA." },
+        { id: 115, topic: "Codice Comportamento", text: "Qualora il dipendente non collabori in sede di indagine interna (es. per omissione reticente) su un illecito posto in essere da un collega (procedimento disciplinare in corso presso l'UPD), egli è passibile di:", options: ["Nessuna sanzione (diritto all'omertà)", "Sanzione penale per falsa testimonianza", "Sanzione disciplinare autonoma per omessa collaborazione", "Premio di produzione per aver difeso i colleghi"], correct: 2, expl: "L'obbligo di cooperazione con gli organi deputati al controllo interno e disciplinare è esplicito; il rifiuto integra un distinto illecito disciplinare." },
+        { id: 116, topic: "Codice Comportamento", text: "Nel comportamento in servizio e nell'orario di lavoro, il dipendente pubblico:", options: ["Può assentarsi liberamente per pausa caffè illimitate", "Assicura il contenimento dei tempi di esecuzione e di evasione delle pratiche (tempestività ed efficienza)", "È tenuto a svolgere il minimo indispensabile per non recare danno al Comune", "Deve evadere solo le pratiche dei cittadini che presentano solleciti ufficiali"], correct: 1, expl: "Il principio di buon andamento (Art. 97 Costituzione) si riflette nel dovere del dipendente di non aggravare il procedimento o ritardare ingiustificatamente l'azione amministrativa." },
+        { id: 117, topic: "Codice Comportamento", text: "Se il dipendente subisce pressioni indebite o richieste di favoritismi per l'adozione di un atto da parte della dirigenza, dei vertici politici o di soggetti terzi:", options: ["Deve assecondarli se provengono da un superiore", "Ne deve dare immediata comunicazione al dirigente (se il terzo è esterno) o all'UPD / RPC (Responsabile Prevenzione Corruzione)", "Deve pubblicare una denuncia anonima sui giornali locali", "Deve rassegnare le dimissioni"], correct: 1, expl: "L'obbligo di denuncia delle illecite pressioni è cardine dell'indipendenza e dell'imparzialità del dipendente che applica la legge." },
+        { id: 118, topic: "Codice Comportamento", text: "La stipula o l'esistenza di un rapporto di parentela/affinità tra un dipendente pubblico con potere decisionale e il titolare dell'azienda che concorre a una gara del Comune genera:", options: ["Una sinergia positiva per l'Ente", "Una pre-assegnazione legale dell'appalto", "Un obbligo inderogabile di astensione (conflitto d'interessi) per il dipendente, che deve essere sostituito", "L'obbligo di appaltare a un'altra ditta anche se questa offre un prezzo fuori mercato"], correct: 2, expl: "Il legame parentale o affettivo rende impossibile, sul piano oggettivo e normativo, garantire la terzietà e l'imparzialità." },
+        { id: 119, topic: "Codice Comportamento", text: "Il Responsabile per la Prevenzione della Corruzione e Trasparenza (RPCT) in un Comune, di norma è:", options: ["Il Sindaco", "Un assessore nominato a rotazione", "Il Segretario Comunale o un dirigente apicale", "Il Comandante dei Vigili"], correct: 2, expl: "La Legge 190/2012 indica di norma il Segretario Generale dell'Ente quale figura tecnica preposta a vigilare sulle misure anticorruzione (RPCT)." },
+        { id: 120, topic: "Codice Comportamento", text: "Durante la vita privata (fuori orario di servizio), il dipendente comunale può comportarsi in modo tale da arrecare grave pregiudizio all'immagine dell'Ente (es. coinvolgimento palese in risse, dichiarazioni pubbliche gravemente diffamatorie contro l'Ente)?", options: ["Sì, la vita privata è totalmente sganciata dai vincoli disciplinari", "No, l'Art. 3 sancisce che il dipendente evita situazioni o comportamenti che possano ostacolare l'adempimento dei doveri o nuocere al prestigio o all'immagine dell'amministrazione", "Sì, basta non indossare divise o tesserini", "Sì, a condizione di risarcire economicamente il Comune"], correct: 1, expl: "Il dipendente pubblico rappresenta l'Istituzione; gravi infrazioni morali e penali nella vita privata possono attivare il procedimento disciplinare qualora ledano il rapporto fiduciario con la PA." },
+
+        // 5. Ordinamento Enti Locali (D.Lgs. 267/2000) - 30 Domande
+        { id: 121, topic: "Ordinamento", text: "Secondo il Testo Unico Enti Locali (TUEL), quali sono gli organi di governo del Comune?", options: ["Sindaco, Dirigenti e Revisori dei Conti", "Sindaco, Giunta e Segretario Comunale", "Consiglio, Giunta e Sindaco", "Sindaco, Assessori e Prefetto"], correct: 2, expl: "L'art. 36 del D.Lgs. 267/2000 individua tre organi politici di governo: il Consiglio, la Giunta, il Sindaco." },
+        { id: 122, topic: "Ordinamento", text: "La deliberazione dello 'Statuto' comunale, atto normativo fondamentale dell'Ente, rientra nella competenza esclusiva di quale organo?", options: ["Del Sindaco con proprio Decreto", "Della Giunta Regionale", "Della Giunta Comunale", "Del Consiglio Comunale"], correct: 3, expl: "L'art. 42 attribuisce in via esclusiva al Consiglio (organo di indirizzo) l'approvazione degli Statuti e dei regolamenti." },
+        { id: 123, topic: "Ordinamento", text: "A chi spetta l'adozione (approvazione) del Regolamento sull'ordinamento degli uffici e dei servizi, nel rispetto dei criteri generali dettati dal Consiglio?", options: ["Al Consiglio Comunale", "Alla Giunta Comunale", "Al Segretario Generale", "Al Sindaco in via autonoma"], correct: 1, expl: "Unica grande eccezione ai regolamenti (tutti del Consiglio): il regolamento degli uffici e dei servizi è di competenza della Giunta Comunale (Art. 48)." },
+        { id: 124, topic: "Ordinamento", text: "Il Sindaco presta giuramento di osservare lealmente la Costituzione italiana dinanzi a quale organo?", options: ["Dinanzi al Prefetto della Provincia", "Dinanzi al Segretario Comunale, a porte chiuse", "Dinanzi al Presidente della Repubblica", "Dinanzi al Consiglio Comunale, nella prima seduta successiva alle elezioni"], correct: 3, expl: "Art. 50 TUEL: il Sindaco giura in aula consiliare durante il primo Consiglio Comunale, momento solenne di insediamento." },
+        { id: 125, topic: "Ordinamento", text: "Qual è la forma classica (nomen iuris) del provvedimento amministrativo adottato dai Dirigenti o dai Responsabili dei Servizi per impegnare la spesa o per assumere decisioni gestionali tecniche?", options: ["Deliberazione (o delibera)", "Determinazione (o determina) dirigenziale", "Decreto legge", "Ordinanza contingibile"], correct: 1, expl: "La Giunta e il Consiglio producono 'Deliberazioni' (atti politici collegiali). I dirigenti producono 'Determinazioni' (atti gestionali monocratici, Art. 107)." },
+        { id: 126, topic: "Ordinamento", text: "Cosa si intende per DUP nell'ordinamento contabile degli Enti Locali?", options: ["Documento Unico Personale", "Documento di Uso Pubblico", "Documento Unico di Programmazione", "Distretto Urbano Prioritario"], correct: 2, expl: "Il DUP (presentato entro il 31 luglio) è la guida strategica triennale del Comune, presupposto indispensabile per approvare il bilancio." },
+        { id: 127, topic: "Ordinamento", text: "Come si definisce un'Azienda Speciale comunale?", options: ["Ente strumentale del Comune dotato di personalità giuridica, statuto e autonomia imprenditoriale, creato per l'esercizio di servizi pubblici ed economici di rilevanza locale", "Una ditta di appalti esterna privata", "L'ufficio del Segretario Comunale", "La squadra operai della manutenzione straordinaria"], correct: 0, expl: "L'art. 114 TUEL definisce l'Azienda Speciale come il 'braccio operativo' (con autonomia giuridica) del Comune per servizi complessi (farmacie, trasporti, raccolta rifiuti)." },
+        { id: 128, topic: "Ordinamento", text: "In un Comune con 10.000 abitanti, chi ricopre la carica di Segretario della Giunta e del Consiglio Comunale redigendone i verbali?", options: ["Il Consigliere più giovane", "Il Difensore Civico", "Il Segretario Comunale", "Un notaio esterno a pagamento"], correct: 2, expl: "L'art. 97 dispone che il Segretario (Generale/Comunale) partecipi alle riunioni con funzioni consultive, referenti e di verbalizzazione." },
+        { id: 129, topic: "Ordinamento", text: "Qual è il termine di legge ordinario previsto dal TUEL per l'approvazione del Rendiconto della Gestione (o Conto Consuntivo) riferito all'anno precedente?", options: ["31 Dicembre", "28 Febbraio", "30 Aprile", "31 Luglio"], correct: 2, expl: "Il Consiglio deve approvare il rendiconto della gestione (il 'resoconto' di come sono stati spesi i soldi e chiuso l'anno) entro il 30 Aprile (Art. 227)." },
+        { id: 130, topic: "Ordinamento", text: "Nell'ambito dell'esercizio delle 'funzioni statali', chi agisce in veste di Ufficiale di Governo nel territorio del Comune?", options: ["Il Prefetto, ma operando dal capoluogo", "Il Sindaco (per servizi elettorali, anagrafe, stato civile, ordinanze urgenti sanitarie)", "Il Comandante della Stazione Carabinieri", "Il Questore"], correct: 1, expl: "Ai sensi dell'art. 54 TUEL, il Sindaco indossa la doppia veste: capo dell'amministrazione locale e organo periferico (Ufficiale di Governo) dello Stato Centrale per le funzioni decentrate." },
+        { id: 131, topic: "Ordinamento", text: "A norma dell'art. 52 del TUEL, da chi deve essere motivata e sottoscritta la Mozione di Sfiducia nei confronti del Sindaco per poter essere presentata in Consiglio?", options: ["Da almeno due quinti dei consiglieri assegnati (incluso il Sindaco)", "Dalla maggioranza assoluta degli elettori del Comune", "Dal Prefetto in via unilaterale", "Da un solo consigliere purché sia il capogruppo di maggioranza"], correct: 0, expl: "Per depositare la mozione servono le firme di 2/5 dei consiglieri. Per approvarla (che causerà la caduta dell'amministrazione) servirà poi il voto della maggioranza assoluta (la metà più uno)." },
+        { id: 132, topic: "Ordinamento", text: "In Italia, cosa ha sostituito la Provincia nei territori densamente urbanizzati delle principali città italiane (es. Roma, Milano, Napoli, Bari) secondo la cd. Legge Delrio (L. 56/2014)?", options: ["La Regione a Statuto Speciale", "La Prefettura rafforzata", "Il Super-Comune", "La Città Metropolitana"], correct: 3, expl: "Le 14 Città Metropolitane sono subentrate alle omonime Province, assumendo funzioni di area vasta strategica su trasporti, ambiente ed edilizia scolastica superiore." },
+        { id: 133, topic: "Ordinamento", text: "Quale principio sancito dalla Costituzione (e richiamato dal TUEL) impone che le funzioni amministrative siano svolte dall'ente territoriale più vicino al cittadino (ovvero il Comune), salvo che per assicurarne l'esercizio unitario non debbano essere conferite a Province, Città Metropolitane, Regioni o Stato?", options: ["Principio di gerarchia", "Principio di Sussidiarietà (verticale)", "Principio di equità fiscale", "Principio del pareggio di bilancio"], correct: 1, expl: "La sussidiarietà (Art. 118 Cost.) prevede che l'Amministrazione sia per default affidata al Comune (l'ente più vicino), 'salendo' di livello solo quando il Comune è troppo piccolo per gestirla." },
+        { id: 134, topic: "Ordinamento", text: "Quanti mandati consecutivi può svolgere, di regola, un Sindaco nei Comuni con popolazione SUPERIORE a 15.000 abitanti (salvo le eccezioni temporali specificate dalla legge, es. mandato inferiore a 2 anni e mezza)?", options: ["Un solo mandato (5 anni totali)", "Fino a 3 mandati consecutivi", "Nessun limite, il mandato è vitalizio se rieletto", "Massimo 2 mandati consecutivi (10 anni totali)"], correct: 3, expl: "Art. 51 TUEL: nei comuni >15.000 ab. il limite è di 2 mandati consecutivi. Per i piccoli e piccolissimi comuni le recenti leggi hanno innalzato il limite a 3 o lo hanno abolito." },
+        { id: 135, topic: "Ordinamento", text: "Chi nomina i dirigenti del Comune e i responsabili degli uffici (posizione organizzativa/EQ), attribuendo loro o revocando gli incarichi?", options: ["Il Segretario Generale, in autonomia", "Il Prefetto", "Il Sindaco, con provvedimento motivato (Decreto sindacale), secondo criteri di competenza", "La Giunta Regionale"], correct: 2, expl: "Art. 50 TUEL: il Sindaco provvede alla nomina, designazione e revoca dei rappresentanti del comune e dei responsabili degli uffici." },
+        { id: 136, topic: "Ordinamento", text: "Cos'è il PEG (Piano Esecutivo di Gestione)?", options: ["Un documento contabile di competenza del Revisore", "Il piano delle opere pubbliche edili triennali", "Il documento redatto dalla Giunta Comunale con cui si assegnano gli obiettivi gestionali e le risorse finanziarie (capitoli di spesa) ai singoli Dirigenti/Responsabili", "Il certificato urbanistico per le varianti al Piano Regolatore"], correct: 2, expl: "Il PEG traduce il bilancio (politico) in obiettivi misurabili e budget specifici affidati ai vari uffici per lavorare concretamente." },
+        { id: 137, topic: "Ordinamento", text: "Quale organo di controllo 'esterno' (magistratura) è incaricato dalla Costituzione e dalle leggi di verificare la sana gestione finanziaria e contabile del Comune?", options: ["Tribunale Amministrativo Regionale (TAR)", "Corte dei Conti (Sezione Regionale di Controllo)", "Consiglio di Stato", "Corte d'Appello Penale"], correct: 1, expl: "La Corte dei Conti giudica il danno erariale ed esamina i bilanci per accertare che i conti dell'ente locale non creino dissesti finanziari per la Repubblica." },
+        { id: 138, topic: "Ordinamento", text: "Perché una Deliberazione della Giunta o del Consiglio diventi formalmente 'esecutiva' (ossia produca i suoi effetti e si possa agire di conseguenza), quale passaggio essenziale legato alla pubblicità legale è richiesto?", options: ["Pubblicazione sulla Gazzetta Ufficiale", "Invio tramite PEC a tutti i cittadini", "Pubblicazione all'Albo Pretorio online del Comune per 15 giorni consecutivi (diviene esecutiva dopo il decimo giorno, o subito se dichiarata di 'immediata eseguibilità')", "Lettura in pubblica piazza da parte del Sindaco"], correct: 2, expl: "L'art. 134 del TUEL lega l'esecutività all'avvenuta pubblicazione all'Albo Pretorio. L'immediata eseguibilità si vota solo in casi di urgenza." },
+        { id: 139, topic: "Ordinamento", text: "Nel caso in cui le dimissioni del Sindaco non vengano ritirate entro 20 giorni dalla presentazione al Consiglio Comunale, cosa succede ex lege?", options: ["Subentra stabilmente il Vicesindaco fino a fine legislatura", "Le dimissioni diventano irrevocabili, e si procede allo scioglimento del Consiglio Comunale con nomina di un Commissario da parte del Prefetto", "Il Consiglio elegge un nuovo Sindaco al suo interno (simile alla fiducia parlamentare)", "Le dimissioni decadono e il Sindaco è obbligato a restare in carica"], correct: 1, expl: "Negli enti locali italiani (sistema maggioritario) vige la regola 'Simul stabunt, simul cadent'. Se cade il vertice (Sindaco), cade tutto il Consiglio eletto insieme a lui." },
+        { id: 140, topic: "Ordinamento", text: "Come si chiamano gli Enti Locali di 2° livello creati per l'esercizio congiunto e ottimizzato di funzioni o servizi tra Comuni (frequentemente impiegato dai piccoli Comuni montani o contermini)?", options: ["Circoscrizioni o Municipi", "Regioni speciali", "Bim (Bacini imbriferi)", "Unioni di Comuni"], correct: 3, expl: "L'Unione di Comuni (Art. 32) è un ente locale costituito da due o più Comuni (che mantengono la propria entità) per gestire uffici e servizi insieme (es. Polizia Locale unica)." },
+        { id: 141, topic: "Ordinamento", text: "Chi sostituisce il Sindaco nei casi di sua assenza, vacanza per morte o impedimento temporaneo?", options: ["Il Consigliere anziano (chi ha preso più voti)", "Il Vicesindaco", "Il Segretario Comunale", "Il Dirigente degli affari generali"], correct: 1, expl: "L'art. 53 sancisce il ruolo vicario del Vicesindaco (che fa parte della Giunta ed è nominato dal Sindaco)." },
+        { id: 142, topic: "Ordinamento", text: "Le 'Funzioni fondamentali' dei Comuni sono elencate dalla Costituzione (Art. 117) e dalle leggi statali. Quale tra i seguenti servizi è tipicamente una funzione fondamentale in capo al Comune?", options: ["Organizzazione e gestione della raccolta e smaltimento dei rifiuti urbani", "Emissione del passaporto e porto d'armi", "Gestione della Polizia Penitenziaria e carceri", "Costruzione e manutenzione della rete autostradale nazionale (Autostrade per l'Italia)"], correct: 0, expl: "La gestione dei rifiuti, i servizi sociali, l'edilizia scolastica locale, l'anagrafe e lo stato civile sono competenze e funzioni radicate nel Comune." },
+        { id: 143, topic: "Ordinamento", text: "Cosa fa l'Organo di Revisione Economico-Finanziaria (Revisore/Collegio dei Revisori)?", options: ["Assume i dipendenti per concorso", "Svolge funzioni di vigilanza sulla regolarità contabile, finanziaria ed economica della gestione del Comune, esprimendo pareri obbligatori e vincolanti sui bilanci", "Redige il Piano Regolatore Generale (PRG)", "Dirige il traffico urbano"], correct: 1, expl: "L'Organo di revisione è indipendente (sorteggiato dalle Prefetture tra professionisti iscritti ad albi contabili) e controlla i conti del Comune dall'interno (Art. 239)." },
+        { id: 144, topic: "Ordinamento", text: "Chi adotta (propone e approva) il Bilancio di Previsione del Comune?", options: ["Il Prefetto emana il decreto; Il Sindaco lo esegue", "La Giunta predispone lo schema; il Consiglio Comunale approva il documento finale entro il termine di legge", "Il Segretario Comunale scrive e firma il bilancio da solo", "Viene approvato con referendum popolare cittadino"], correct: 1, expl: "Le competenze sono divise: la Giunta è l'organo esecutivo che 'scrive' lo schema di bilancio, ma la competenza sovrana e ultima per l'approvazione è del Consiglio (Art. 42 e 174)." },
+        { id: 145, topic: "Ordinamento", text: "In tema di controlli interni della PA locale, la 'verifica della realizzazione degli obiettivi' pianificati, 'dell'efficienza e dell'efficacia' dell'azione amministrativa prende il nome di:", options: ["Controllo di regolarità amministrativa", "Controllo di gestione", "Controllo preventivo di legittimità", "Controllo antimafia"], correct: 1, expl: "Il Controllo di gestione (Art. 147-ter TUEL) analizza i costi e i rendimenti dei servizi erogati, misurando se l'ente sta sprecando risorse o centrando gli scopi." },
+        { id: 146, topic: "Ordinamento", text: "Di chi si avvalgono gli uffici per mettere in riscossione coattiva (forzata) le somme dovute dai cittadini morosi (es. multe non pagate, IMU evasa, rette insolute)?", options: ["Dell'Ufficio Tecnico", "Della Polizia di Stato", "Delle Poste", "Del concessionario della riscossione (es. Agenzia delle Entrate-Riscossione) o ricorrendo all'Ingiunzione fiscale diretta"], correct: 3, expl: "I Comuni attivano procedure esecutive esternalizzando l'incasso coattivo (AdE-Riscossione) o notificando atti di 'ingiunzione' con ufficiali della riscossione propri o privati iscritti in albo." },
+        { id: 147, topic: "Ordinamento", text: "Cosa comporta l'istituto del 'Dissesto Finanziario' di un Comune?", options: ["L'abbandono dell'edificio comunale per inagibilità", "Una situazione di insolvenza irreversibile in cui l'Ente non può garantire l'assolvimento delle funzioni e dei servizi indispensabili, né fare fronte ai debiti", "Un semplice rinvio dell'approvazione del bilancio di 30 giorni", "L'obbligo di regalare i beni comunali allo Stato"], correct: 1, expl: "Il dissesto (il fallimento dell'Ente ex Art. 244 TUEL) fa subentrare un Commissario Straordinario ministeriale (O.S.L.) incaricato di gestire e liquidare la pesante mole di debiti regressi, innalzando contemporaneamente al massimo le tasse locali." },
+        { id: 148, topic: "Ordinamento", text: "Entro quale data il Consiglio Comunale, salvo proroghe concesse con decreto statale, è tenuto per legge ad approvare il Bilancio di Previsione Finanziario per il triennio successivo?", options: ["31 Luglio dell'anno in corso", "31 Dicembre dell'anno precedente al triennio di riferimento", "28 Febbraio dell'anno in corso", "30 Aprile dell'anno in corso"], correct: 1, expl: "L'art. 151 co. 1 fissa al 31 Dicembre il termine (costantemente oggetto di rinvii governativi al 28 febbraio o al 31 marzo) per dotare il Comune del bilancio autorizzatorio per l'anno venturo." },
+        { id: 149, topic: "Ordinamento", text: "Per l'organizzazione dei propri uffici, l'Amministrazione Locale adotta la 'Dotazione Organica' e un documento triennale in materia di personale (ex PIAO). Come viene chiamato il piano assunzionale?", options: ["Piano di lottizzazione edilizia", "Piano Esecutivo di Gestione (PEG)", "Piano Triennale dei Fabbisogni di Personale", "Piano Industriale Aziendale"], correct: 2, expl: "Il Piano dei Fabbisogni di Personale (oggi inglobato nel macro-documento PIAO) programma quante e quali figure assumere nel triennio per colmare i pensionamenti e garantire i servizi." },
+        { id: 150, topic: "Ordinamento", text: "Qual è la fonte di finanziamento principale definita come 'entrata tributaria propria' del bilancio di un Comune?", options: ["I contributi a fondo perduto erogati dell'Unione Europea", "Il mutuo concesso dalla Cassa Depositi e Prestiti", "I prestiti dalle banche locali (anticipazioni di cassa)", "Il gettito dei tributi locali come l'IMU, la TARI e le addizionali IRPEF, imposti e riscossi autonomamente"], correct: 3, expl: "Le entrate del Titolo I (Tributarie) derivanti da tasse e imposte applicate ai propri residenti (TARI, IMU, Add.le IRPEF, Canone Unico, Imposta di Soggiorno) costituiscono la spina dorsale dell'autonomia finanziaria locale." },
+
+        // 6. Conoscenza Elementare della Lingua Inglese - 30 Domande
+        { id: 151, topic: "Inglese", text: "Qual è l'esatta traduzione italiana del termine istituzionale 'Municipality'?", options: ["Polizia locale o Municipale", "Comune o Municipalità (l'ente locale)", "Corte d'Appello", "Sindacato dei dipendenti"], correct: 1, expl: "La 'Municipality' è l'ente territoriale, la città amministrata. 'City Council' si riferisce all'organo (Consiglio) e 'City Hall' al palazzo (Municipio)." },
+        { id: 152, topic: "Inglese", text: "Traduci correttamente la frase: 'The employee is on sick leave today'.", options: ["Il dipendente è maleducato e si è licenziato oggi.", "Il dipendente è in trasferta aziendale.", "Il dipendente oggi è assente per permesso o congedo di malattia.", "Il dipendente lascia l'ufficio ammalato."], correct: 2, expl: "In inglese HR (Human Resources), 'leave' indica un congedo autorizzato. 'Sick leave' è la malattia, 'maternity leave' la maternità, 'annual leave' le ferie." },
+        { id: 153, topic: "Inglese", text: "Cosa intende una comunicazione via mail della PA quando fissa una 'Deadline'?", options: ["Segnala la tracciatura di una linea sui documenti", "Definisce un allegato pesante", "Indica la data di scadenza (o termine perentorio) entro cui inviare o completare la pratica", "Richiede la stampa immediata del file"], correct: 2, expl: "'Deadline' (lett. linea mortale) è usato universalmente nel mondo del lavoro per indicare il termine ultimo di consegna o scadenza." },
+        { id: 154, topic: "Inglese", text: "Completa correttamente l'interrogativa formale: '____ you tell me where the Mayor's office is, please?'", options: ["Must", "Could (o Would)", "Are", "Did"], correct: 1, expl: "Nei registri formali 'Could you...' (Potrebbe...) o 'Would you...' (Vorrebbe...) sono le forme di cortesia corrette per chiedere informazioni al pubblico." },
+        { id: 155, topic: "Inglese", text: "In una gara d'appalto europea, il termine 'Public procurement' indica:", options: ["L'ufficio della Procura della Repubblica", "Gli appalti pubblici, ovvero il processo di approvvigionamento e acquisto di beni e servizi da parte della PA", "La cura delle pubbliche relazioni e della stampa", "Il servizio di sanificazione ambientale stradale"], correct: 1, expl: "Il Procurement è il settore dedicato ad acquisti, gare, offerte (Tenders) e contratti. Falso amico: non c'entra con la Procura (Prosecutor's office)." },
+        { id: 156, topic: "Inglese", text: "Qual è il plurale grammaticalmente corretto del sostantivo irregolare 'Woman'?", options: ["Womans", "Wimens", "Women", "Womanes"], correct: 2, expl: "Il plurale è Women (si pronuncia 'uìmin'). Analogamente Man diviene Men, Person diviene People." },
+        { id: 157, topic: "Inglese", text: "Completa la frase con il verbo corretto: 'I am writing ____ an appointment with the manager.'", options: ["to request", "for request", "requesting", "to requesting"], correct: 0, expl: "L'infinito di scopo in inglese si rende con 'to + verbo base' (sto scrivendo PER richiedere = I am writing TO request)." },
+        { id: 158, topic: "Inglese", text: "Attenzione ai falsi amici. Cosa indica la parola 'Library' nella planimetria di una città?", options: ["La libreria (negozio che vende libri, bookshop)", "La Biblioteca (edificio pubblico che presta e conserva libri)", "L'ufficio anagrafe", "Il cimitero monumentale"], correct: 1, expl: "Library = Biblioteca. Il negozio in cui si comprano i volumi è il Bookshop o Bookstore." },
+        { id: 159, topic: "Inglese", text: "Quale espressione si usa, in calce a una e-mail di lavoro in inglese, per indicare i file acclusi al messaggio?", options: ["Please find attached...", "Please find printed...", "Look at the enclosures...", "Files inside the mail..."], correct: 0, expl: "'Please find attached...' (Si prega di trovare allegato...) è la formula standard commerciale e burocratica per segnalare un 'Attachment' (allegato)." },
+        { id: 160, topic: "Inglese", text: "Come si dice 'Certificato di nascita' in lingua inglese (documento frequente nei servizi demografici)?", options: ["Birthday Paper", "Born Ticket", "Birth certificate", "Nativity Card"], correct: 2, expl: "Certificate è il documento ufficiale, Birth è nascita. Esempi: Marriage certificate (matrimonio), Death certificate (morte)." },
+        { id: 161, topic: "Inglese", text: "In inglese l'acronimo IT (si pronuncia Ai-Tì) definisce il settore dell'ufficio CED e computer. Per cosa sta?", options: ["Internal Taxes", "Information Technology", "International Transfer", "Italian Territory"], correct: 1, expl: "L'Information Technology raggruppa le tecnologie dell'informazione, l'assistenza sui computer e lo sviluppo software." },
+        { id: 162, topic: "Inglese", text: "Nella gestione dei servizi al cittadino, cosa significa il termine 'Taxes'?", options: ["Servizio pubblico di Taxi", "Testi letterari e documenti", "Imposte e tasse (es. tributi locali, income tax, local taxes)", "Rifiuti plastici"], correct: 2, expl: "Tax (al plurale Taxes) identifica le imposte (fiscalità, tributi)." },
+        { id: 163, topic: "Inglese", text: "Scegli la forma verbale corretta: 'The documents ____ signed yesterday by the Mayor'.", options: ["are", "were", "have been", "was"], correct: 1, expl: "Il marcatore temporale 'yesterday' (ieri) obbliga all'uso del Past Simple passivo. Essendo plurale (The documents) si usa 'were'." },
+        { id: 164, topic: "Inglese", text: "In campo lavorativo, qual è la netta differenza tra 'Employer' e 'Employee'?", options: ["Sono sinonimi", "'Employer' è il dipendente neoassunto, 'Employee' il dirigente", "'Employer' è il datore di lavoro, 'Employee' è il dipendente / lavoratore impiegato", "Nessuna, sono termini antiquati"], correct: 2, expl: "Il suffisso '-er' indica spesso colui che compie o eroga l'azione (chi dà lavoro). Il suffisso passivo '-ee' indica chi la riceve o è impiegato (il lavoratore)." },
+        { id: 165, topic: "Inglese", text: "Cosa richiede esattamente di fare al cittadino il cartello 'Fill in the form' esposto in Comune?", options: ["Firmare l'atto in triplice copia", "Compilare il modulo/formulario in tutti i suoi campi", "Aspettare in fila (mettersi in coda)", "Pagare la quota alla cassa automatica"], correct: 1, expl: "Il phrasal verb 'To fill in' (o 'to fill out') significa riempire, compilare i campi. 'Form' è il modulo o l'istanza stampata." },
+        { id: 166, topic: "Inglese", text: "In inglese formale, per aprire una lettera destinata a un ufficio generico (quando non si conosce il nome e genere della persona) si utilizza:", options: ["Hello guys,", "Dear Sir or Madam, (o To whom it may concern,)", "Hi there,", "Dear Friend,"], correct: 1, expl: "'Dear Sir or Madam' o 'To whom it may concern' (A chi di competenza) sono le uniche formule di saluto professionali per lettere e mail ufficiali a un destinatario ignoto." },
+        { id: 167, topic: "Inglese", text: "Quale di queste parole si traduce in italiano come 'Fattura' (documento contabile fiscale)?", options: ["Receipt", "Invoice", "Facture", "Ticket"], correct: 1, expl: "La 'Receipt' (scontrino, ricevuta) viene emessa al momento del pagamento. L'Invoice' è la vera e propria fattura con voci di dettaglio commerciali emessa da un'azienda o fornitore." },
+        { id: 168, topic: "Inglese", text: "Se ricevi un invito con indicato: 'The meeting will take place ON Monday AT 9:00', per quando sei convocato?", options: ["Sulla scrivania numero 9, il prossimo mese", "In piazza principale lunedì prossimo in orario indeterminato", "La riunione si terrà (avrà luogo) Lunedì alle ore 9:00", "Lunedì 9 del mese senza specificare l'ora"], correct: 2, expl: "La preposizione 'on' si usa per i giorni della settimana (on Monday). 'At' introduce l'orario preciso (at 9 o'clock)." },
+        { id: 169, topic: "Inglese", text: "Nel mondo amministrativo o giudiziario, la parola inglese 'Law' si traduce in:", options: ["Basso, inferiore", "Legge o Diritto", "Avvocato in tribunale", "Prato inglese rasato"], correct: 1, expl: "'Law' (legge). Basso si scrive 'Low', avvocato è 'Lawyer', il prato è il 'Lawn'." },
+        { id: 170, topic: "Inglese", text: "Qual è il sostantivo inglese per dire 'Firma' alla fine di un modulo?", options: ["Firm", "Sign", "Autograph", "Signature"], correct: 3, expl: "'Firm' significa azienda/studio; 'Sign' è il verbo (firmare) o il cartello stradale. La firma fisica o digitale si chiama 'Signature'." },
+        { id: 171, topic: "Inglese", text: "Se a lavoro si richiede di partecipare attivamente a un corso di formazione, quale verbo inglese è il più appropriato (es. partecipare a un meeting / corso)?", options: ["To pretend", "To attempt", "To attend", "To anticipate"], correct: 2, expl: "Falso amico! 'To attend' (assistere/partecipare) non ha nulla a che fare con l'italiano 'attendere' (che si dice to wait). 'Pretend' significa fingere." },
+        { id: 172, topic: "Inglese", text: "Completa con l'articolo corretto: 'He is ____ architect who designed the new library.'", options: ["a", "an", "the", "some"], correct: 2, expl: "Si usa il 'The' (determinativo) perché stiamo parlando di uno specifico e unico architetto, ovvero 'l'architetto che ha progettato... e non di un architetto qualsiasi." },
+        { id: 173, topic: "Inglese", text: "Cosa si intende in una PA quando si lavora su una 'Draft' e non su una final version?", options: ["Un documento definitivo, bollato e archiviato", "Una bozza, una minuta provvisoria di documento in corso di stesura o revisione", "La traduzione da una lingua estera", "Il prospetto di un bonifico bancario"], correct: 1, expl: "La 'Draft' indica la versione temporanea e modificabile di un elaborato, di una delibera o di una lettera." },
+        { id: 174, topic: "Inglese", text: "Come si dice 'Cittadino' (membro appartenente alla comunità di uno Stato o Comune) in lingua inglese?", options: ["Civilian", "Countryman", "Citizen", "Resident"], correct: 2, expl: "Citizen = cittadino; Citizenship = cittadinanza." },
+        { id: 175, topic: "Inglese", text: "Un cittadino estero entra nell'Ufficio Anagrafe e dice 'I need to renew my passport'. Cosa sta chiedendo?", options: ["Vorrebbe cancellare la sua identità dal comune.", "Sta domandando dove si compra un biglietto per l'aeroporto.", "Ha bisogno (gli occorre) di rinnovare il suo passaporto.", "Denuncia di aver smarrito la valigia."], correct: 2, expl: "Il verbo 'to renew' (rinnovare, composto da 're' + 'new') e 'I need' (io ho bisogno di) inquadrano la richiesta documentale." },
+        { id: 176, topic: "Inglese", text: "Qual è il comparativo di maggioranza corretto dell'aggettivo 'good' (buono/bene)?", options: ["Gooder", "More good", "Better", "Best"], correct: 2, expl: "Good ha una declinazione totalmente irregolare: comparativo 'Better' (migliore), superlativo 'The best' (il migliore)." },
+        { id: 177, topic: "Inglese", text: "A cosa si riferisce il termine 'Job interview' durante l'iter di un concorso (o bando pubblico)?", options: ["Una sospensione disciplinare dal lavoro", "Un colloquio orale finalizzato all'assunzione o alla valutazione del candidato", "L'intervista sui giornali rilasciata dal vincitore", "Il lavoro in remoto (Smart working)"], correct: 1, expl: "La 'job interview' è, a tutti gli effetti, il colloquio di selezione lavorativa." },
+        { id: 178, topic: "Inglese", text: "In inglese, i vocaboli 'Schedule' (noun) e 'To schedule' (verb) sono essenziali per pianificare le agende. Qual è il loro significato?", options: ["Sedia / sedersi al tavolo", "Schema architettonico / tracciare planimetrie", "Programma, Orario / Fissare o pianificare un appuntamento o un evento", "Documento segreto / nascondere informazioni"], correct: 2, expl: "La Schedule è il programma delle attività, l'agenda. 'To schedule a meeting' significa programmare/pianificare un incontro in una certa data." },
+        { id: 179, topic: "Inglese", text: "Cosa vuol dire il cartello 'Out of order' affisso, ad esempio, su un ascensore o una stampigliatrice marcatempo del Comune?", options: ["Apparecchiatura momentaneamente guasta o fuori servizio", "Servizio gratuito per i cittadini", "Spazio riservato ai dipendenti del comune", "Apparecchiatura vecchia, venduta al miglior offerente"], correct: 0, expl: "'Out of order' segnala che una macchina, un bagno o un servizio è guasto o non funzionante. Non significa 'fuori ordinanza'." },
+        { id: 180, topic: "Inglese", text: "Scegli l'opzione corretta: 'If I pass the competition (concorso), I ____ very happy!'", options: ["will be", "am", "would be", "was"], correct: 0, expl: "Periodo Ipotetico del 1° tipo (reale e possibile): If + Present Simple (pass), Main clause con Will + forma base (will be)." }
+    ];
+
+    /* ================= STATE ================= */
+    let appState = {
+        activeTab: 0,
+        mistakes: JSON.parse(localStorage.getItem('quiz_mistakes') || '[]'),
+        stats: JSON.parse(localStorage.getItem('quiz_stats') || '{"total":0, "avg":0, "sumScores":0}'),
+        settings: JSON.parse(localStorage.getItem('quiz_settings') || '{"theme":"system", "color":"#12827c", "time":0, "topic":"Tutti gli argomenti", "numQs":10}'),
+        quiz: null 
+    };
+
+    /* ================= DOM ELEMENTS ================= */
+    const track = document.getElementById('track');
+    const indicator = document.getElementById('nav-indicator');
+    const navItems = document.querySelectorAll('.nav-item');
+    const topBar = document.getElementById('top-bar');
+
+    /* ================= SWIPE NAVIGATION LOGIC ================= */
+    let startX = 0, startY = 0, currentX = 0, currentY = 0;
+    let isDragging = false, isSwiping = false, isScrolling = false;
+    let dragStartTime = 0;
+
+    function updateNavIndicator() {
+        const itemWidth = 100 / navItems.length;
+        indicator.style.width = `calc(${itemWidth}% - 16px)`;
+        indicator.style.left = `calc(${appState.activeTab * itemWidth}% + 8px)`;
+        navItems.forEach((n, i) => n.classList.toggle('active', i === appState.activeTab));
+        
+        // Aggiorna titolo
+        const titles = ["Simulazione", "Errori", "Report", "Impostazioni"];
+        topBar.textContent = titles[appState.activeTab];
+        
+        // Lazy build per Errori e Report
+        if(appState.activeTab === 1) buildErrorsList();
+        if(appState.activeTab === 2) buildReportView();
+    }
+
+    function goToTab(index, animate = true) {
+        if (index < 0 || index > 3) return;
+        appState.activeTab = index;
+        track.style.transition = animate ? 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none';
+        track.style.transform = `translate3d(-${index * 25}%, 0, 0)`;
+        updateNavIndicator();
+    }
+
+    navItems.forEach((item, index) => {
+        item.addEventListener('click', () => goToTab(index, false));
+    });
+
+    track.addEventListener('touchstart', (e) => {
+        if(document.querySelector('.overlay.active')) return; // ignora se popup aperto
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        isDragging = true; isSwiping = false; isScrolling = false;
+        dragStartTime = Date.now();
+        track.style.transition = 'none';
+    }, {passive: true});
+
+    track.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        currentX = e.touches[0].clientX;
+        currentY = e.touches[0].clientY;
+        let dx = currentX - startX;
+        let dy = currentY - startY;
+
+        if (!isSwiping && !isScrolling) {
+            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) isSwiping = true;
+            else if (Math.abs(dy) > 10) isScrolling = true;
+        }
+
+        if (isSwiping) {
+            // Effetto swipe orizzontale
+            let offset = -(appState.activeTab * 25);
+            let pxOffset = offset * (track.offsetWidth / 400) + dx;
+            
+            // Elastico ai bordi
+            if (pxOffset > 0) pxOffset = pxOffset / 3;
+            const maxPx = -(track.offsetWidth * 0.75);
+            if (pxOffset < maxPx) pxOffset = maxPx + (pxOffset - maxPx) / 3;
+            
+            track.style.transform = `translate3d(${pxOffset}px, 0, 0)`;
+        }
+    }, {passive: true});
+
+    track.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (isSwiping) {
+            let dx = currentX - startX;
+            let time = Date.now() - dragStartTime;
+            let velocity = Math.abs(dx) / time;
+            let threshold = window.innerWidth * 0.3;
+
+            if (Math.abs(dx) > threshold || velocity > 0.5) {
+                if (dx > 0 && appState.activeTab > 0) appState.activeTab--;
+                else if (dx < 0 && appState.activeTab < 3) appState.activeTab++;
+            }
+            goToTab(appState.activeTab, true);
+        }
+    });
+
+    /* ================= SETTINGS & THEMES ================= */
+    const defaultSettings = {theme: "system", color: "#12827c", time: 0, topic: "Tutti gli argomenti", numQs: 10};
+
+    function saveSettings() {
+        localStorage.setItem('quiz_settings', JSON.stringify(appState.settings));
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.removeAttribute('data-theme');
+        if (theme !== 'system') document.documentElement.setAttribute('data-theme', theme);
+        else {
+            if(window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
+    }
+    
+    function applyColor(hex, hex2, rgb) {
+        document.documentElement.style.setProperty('--pr', hex);
+        document.documentElement.style.setProperty('--pr2', hex2);
+        document.documentElement.style.setProperty('--pr-rgb', rgb);
+        document.querySelectorAll('.dot').forEach(d => d.classList.toggle('active', d.dataset.c === hex));
+    }
+
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            appState.settings.theme = btn.dataset.theme;
+            applyTheme(btn.dataset.theme);
+            saveSettings();
+        });
+    });
+
+    document.querySelectorAll('.dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+            appState.settings.color = dot.dataset.c;
+            appState.settings.color2 = dot.dataset.c2;
+            appState.settings.rgb = dot.dataset.rgb;
+            applyColor(dot.dataset.c, dot.dataset.c2, dot.dataset.rgb);
+            saveSettings();
+        });
+    });
+
+    /* ================= TIMER CONTROLS & TOPICS ================= */
+    const timeInput = document.getElementById('time-input');
+    const qInput = document.getElementById('q-input');
+    
+    function updateTimeInput(val) {
+        let current = parseInt(appState.settings.time);
+        let next = current + val;
+        if(next >= 0 && next <= 120) {
+            appState.settings.time = next;
+            timeInput.value = next === 0 ? "0 (Infinito)" : next;
+            saveSettings();
+        }
+    }
+    
+    function updateQInput(val) {
+        let current = parseInt(appState.settings.numQs) || 10;
+        let next = current + val;
+        // Limita il numero tra 5 e il massimo disponibile nel db (180)
+        if(next >= 5 && next <= questionsDb.length) {
+            appState.settings.numQs = next;
+            qInput.value = next;
+            saveSettings();
+        }
+    }
+    
+    document.getElementById('btn-time-minus').addEventListener('click', () => updateTimeInput(-5));
+    document.getElementById('btn-time-plus').addEventListener('click', () => updateTimeInput(5));
+
+    document.getElementById('btn-q-minus').addEventListener('click', () => updateQInput(-5));
+    document.getElementById('btn-q-plus').addEventListener('click', () => updateQInput(5));
+
+    function renderTopics() {
+        const grid = document.getElementById('topic-grid');
+        grid.innerHTML = '';
+        
+        const topicsList = ["Tutti gli argomenti", "Manutenzione", "Sicurezza", "Informatica", "Codice Comportamento", "Ordinamento", "Inglese"];
+        
+        topicsList.forEach(t => {
+            const btn = document.createElement('div');
+            btn.className = 'topic-btn' + (appState.settings.topic === t ? ' active' : '');
+            
+            let count = t === "Tutti gli argomenti" 
+                ? questionsDb.length 
+                : questionsDb.filter(q => q.topic === t).length;
+            
+            btn.innerHTML = `<span>${t}</span> <span class="topic-count">${count}</span>`;
+            btn.onclick = () => {
+                appState.settings.topic = t;
+                saveSettings();
+                renderTopics();
+            };
+            grid.appendChild(btn);
+        });
+    }
+
+    /* ================= UI UTILS ================= */
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    function showConfirm(title, msg, onConfirm) {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-msg').textContent = msg;
+        const overlay = document.getElementById('modal-overlay');
+        const btnCancel = document.getElementById('modal-cancel');
+        const btnConfirm = document.getElementById('modal-confirm');
+        
+        overlay.classList.add('active');
+        
+        const cleanup = () => {
+            overlay.classList.remove('active');
+            btnCancel.removeEventListener('click', onCancel);
+            btnConfirm.removeEventListener('click', onOk);
+        };
+        
+        const onCancel = () => cleanup();
+        const onOk = () => { cleanup(); onConfirm(); };
+        
+        btnCancel.addEventListener('click', onCancel);
+        btnConfirm.addEventListener('click', onOk);
+    }
+
+    /* ================= QUIZ ENGINE ================= */
+    let timerInterval;
+
+    function shuffle(array) {
+        let currentIndex = array.length, randomIndex;
+        while (currentIndex > 0) {
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex--;
+            [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+        }
+        return array;
+    }
+
+    function startQuiz(reviewMode = false) {
+        let pool = [...questionsDb];
+        
+        if (reviewMode) {
+            pool = pool.filter(q => appState.mistakes.includes(q.id));
+            if (pool.length === 0) {
+                showToast("Nessun errore da ripassare!");
+                return;
+            }
+        } else {
+            if (appState.settings.topic !== "Tutti gli argomenti") {
+                pool = pool.filter(q => q.topic === appState.settings.topic);
+            }
+            if (pool.length === 0) {
+                showToast("Nessuna domanda per questo argomento.");
+                return;
+            }
+        }
+        
+        let qCount = appState.settings.numQs || 10;
+        pool = shuffle(pool).slice(0, Math.min(qCount, pool.length));
+        
+        appState.quiz = {
+            questions: pool,
+            currentIdx: 0,
+            score: 0,
+            timeTotal: appState.settings.time * 60,
+            timeRemaining: appState.settings.time * 60,
+            reviewMode: reviewMode
+        };
+
+        document.getElementById('quiz-setup').classList.add('hidden');
+        document.getElementById('quiz-result').classList.add('hidden');
+        document.getElementById('quiz-active').classList.remove('hidden');
+        
+        startTimer();
+        renderQuestion();
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        const el = document.getElementById('q-timer');
+        const fill = document.getElementById('q-time-fill');
+        const wrap = document.getElementById('time-bar-wrap');
+        
+        if (appState.quiz.timeTotal === 0) {
+            el.textContent = '∞';
+            wrap.style.display = 'none';
+            return;
+        }
+        
+        wrap.style.display = 'block';
+        fill.classList.remove('danger');
+        fill.style.width = '100%';
+        
+        timerInterval = setInterval(() => {
+            appState.quiz.timeRemaining--;
+            let m = Math.floor(appState.quiz.timeRemaining / 60);
+            let s = appState.quiz.timeRemaining % 60;
+            el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+            
+            let pct = (appState.quiz.timeRemaining / appState.quiz.timeTotal) * 100;
+            fill.style.width = `${pct}%`;
+            
+            if (pct <= 20) fill.classList.add('danger');
+            
+            if(appState.quiz.timeRemaining <= 0) {
+                clearInterval(timerInterval);
+                finishQuiz(true);
+            }
+        }, 1000);
+    }
+
+    function renderQuestion() {
+        const q = appState.quiz.questions[appState.quiz.currentIdx];
+        document.getElementById('q-counter').textContent = `${appState.quiz.currentIdx + 1}/${appState.quiz.questions.length}`;
+        document.getElementById('q-topic').textContent = q.topic;
+        document.getElementById('q-text').textContent = q.text;
+        
+        document.getElementById('q-progress').style.width = `${((appState.quiz.currentIdx) / appState.quiz.questions.length) * 100}%`;
+        
+        const optsContainer = document.getElementById('q-options');
+        optsContainer.innerHTML = '';
+        
+        q.options.forEach((optText, index) => {
+            let div = document.createElement('div');
+            div.className = 'option';
+            div.textContent = optText;
+            div.onclick = () => selectOption(index);
+            optsContainer.appendChild(div);
+        });
+        
+        const expl = document.getElementById('q-explanation');
+        expl.style.display = 'none';
+        document.getElementById('btn-next').classList.add('hidden');
+    }
+
+    function selectOption(index) {
+        if (!appState.quiz || document.querySelector('.option.correct')) return; // Già risposto
+        
+        const q = appState.quiz.questions[appState.quiz.currentIdx];
+        const opts = document.querySelectorAll('.option');
+        
+        opts[index].classList.add('selected');
+        
+        if (index === q.correct) {
+            opts[index].classList.add('correct');
+            appState.quiz.score++;
+            // Rimuovi da mistakes se c'era
+            appState.mistakes = appState.mistakes.filter(id => id !== q.id);
+        } else {
+            opts[index].classList.add('wrong');
+            opts[q.correct].classList.add('correct');
+            // Aggiungi a mistakes
+            if(!appState.mistakes.includes(q.id)) appState.mistakes.push(q.id);
+        }
+        
+        localStorage.setItem('quiz_mistakes', JSON.stringify(appState.mistakes));
+        document.getElementById('err-count').textContent = appState.mistakes.length;
+        
+        const expl = document.getElementById('q-explanation');
+        expl.textContent = q.expl;
+        expl.style.display = 'block';
+        
+        document.getElementById('btn-next').classList.remove('hidden');
+    }
+
+    function nextQuestion() {
+        appState.quiz.currentIdx++;
+        if (appState.quiz.currentIdx < appState.quiz.questions.length) {
+            renderQuestion();
+        } else {
+            finishQuiz();
+        }
+    }
+
+    function confirmEndQuiz() {
+        showConfirm("Termina Quiz", "Sei sicuro di voler interrompere la simulazione?", () => {
+            finishQuiz(true);
+        });
+    }
+
+    function finishQuiz(forced = false) {
+        clearInterval(timerInterval);
+        document.getElementById('quiz-active').classList.add('hidden');
+        document.getElementById('quiz-result').classList.remove('hidden');
+        
+        const total = appState.quiz.questions.length;
+        const score = appState.quiz.score;
+        document.getElementById('res-score').textContent = `${score}/${total}`;
+        
+        let msg = score === total ? "Perfetto! Ottimo lavoro." : (score > total/2 ? "Buon risultato, continua così." : "Puoi fare di meglio, ripassa gli errori.");
+        if (forced) msg = "Quiz interrotto.";
+        document.getElementById('res-msg').textContent = msg;
+
+        if (!appState.quiz.reviewMode && !forced) {
+            appState.stats.total++;
+            appState.stats.sumScores += (score / total) * 100;
+            appState.stats.avg = Math.round(appState.stats.sumScores / appState.stats.total);
+            localStorage.setItem('quiz_stats', JSON.stringify(appState.stats));
+        }
+    }
+
+    function resetQuizView() {
+        appState.quiz = null;
+        document.getElementById('quiz-result').classList.add('hidden');
+        document.getElementById('quiz-setup').classList.remove('hidden');
+        document.getElementById('q-progress').style.width = `0%`;
+    }
+
+    /* ================= TAB 1: ERRORI ================= */
+    function buildErrorsList() {
+        const container = document.getElementById('errors-list');
+        container.innerHTML = '';
+        
+        const errors = questionsDb.filter(q => appState.mistakes.includes(q.id));
+        if(errors.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-sec); text-align: center; padding: 32px 0;">Nessun errore salvato. Ottimo!</div>';
+            return;
+        }
+
+        errors.forEach(q => {
+            let card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="title-sec" style="margin:0 0 8px 0;">${q.topic}</div>
+                <div style="font-weight: 500; margin-bottom: 8px;">${q.text}</div>
+                <div style="font-size: 14px; color: #22c55e; margin-bottom: 8px;">Corretta: ${q.options[q.correct]}</div>
+                <div class="explanation" style="display:block; margin-top:0; padding:12px;">${q.expl}</div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    /* ================= TAB 2: REPORT & EXPORT ================= */
+    function buildReportView() {
+        document.getElementById('stat-total').textContent = appState.stats.total;
+        document.getElementById('stat-avg').textContent = `${appState.stats.avg}%`;
+    }
+
+    function exportCSV() {
+        let csvContent = "\uFEFF"; // BOM for UTF-8
+        csvContent += "ID;Argomento;Domanda;Risposta Corretta;Spiegazione\n";
+        
+        questionsDb.forEach(q => {
+            let text = q.text.replace(/"/g, '""').replace(/;/g, ',');
+            let ans = q.options[q.correct].replace(/"/g, '""').replace(/;/g, ',');
+            let exp = q.expl.replace(/"/g, '""').replace(/;/g, ',');
+            csvContent += `"${q.id}";"${q.topic}";"${text}";"${ans}";"${exp}"\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "quiz_export.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("CSV esportato con successo");
+    }
+
+    function exportPDF() {
+        if (!window.jspdf) { showToast("Libreria PDF non ancora caricata."); return; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        doc.setFontSize(18);
+        doc.text("Report Errori - Quiz Concorsi", 10, 20);
+        
+        doc.setFontSize(12);
+        let y = 30;
+        
+        const errors = questionsDb.filter(q => appState.mistakes.includes(q.id));
+        if(errors.length === 0) {
+            doc.text("Nessun errore registrato.", 10, y);
+        } else {
+            errors.forEach(q => {
+                if (y > 270) { doc.addPage(); y = 20; }
+                doc.setFont(undefined, 'bold');
+                let linesTopic = doc.splitTextToSize(`[${q.topic}]`, 190);
+                doc.text(linesTopic, 10, y); y += 6 * linesTopic.length;
+                
+                doc.setFont(undefined, 'normal');
+                let linesText = doc.splitTextToSize(q.text, 190);
+                doc.text(linesText, 10, y); y += 6 * linesText.length;
+                
+                doc.setTextColor(0, 150, 0);
+                let linesAns = doc.splitTextToSize(`Risp: ${q.options[q.correct]}`, 190);
+                doc.text(linesAns, 10, y); y += 6 * linesAns.length;
+                doc.setTextColor(0, 0, 0);
+                y += 5;
+            });
+        }
+        
+        doc.save("report_errori.pdf");
+        showToast("PDF generato con successo");
+    }
+
+    /* ================= TAB 3: BACKUP ================= */
+    function exportJSON() {
+        const data = {
+            mistakes: appState.mistakes,
+            stats: appState.stats,
+            settings: appState.settings
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "quiz_backup.json";
+        link.click();
+    }
+
+    function importJSON(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (data.settings && data.stats) {
+                    showConfirm("Ripristino Dati", "Sovrascrivere i dati attuali con il backup?", () => {
+                        appState.mistakes = data.mistakes || [];
+                        appState.stats = data.stats;
+                        appState.settings = data.settings;
+                        
+                        localStorage.setItem('quiz_mistakes', JSON.stringify(appState.mistakes));
+                        localStorage.setItem('quiz_stats', JSON.stringify(appState.stats));
+                        saveSettings();
+                        
+                        initApp();
+                        showToast("Dati ripristinati correttamente.");
+                    });
+                }
+            } catch (err) {
+                showToast("File non valido!");
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // reset
+    }
+
+    function confirmResetAll() {
+        showConfirm("Attenzione", "Vuoi cancellare tutti i dati, incluse statistiche ed errori?", () => {
+            localStorage.clear();
+            appState.mistakes = [];
+            appState.stats = {total:0, avg:0, sumScores:0};
+            appState.settings = { ...defaultSettings };
+            saveSettings();
+            initApp();
+            showToast("Dati azzerati.");
+        });
+    }
+
+    /* ================= INIT ================= */
+    function initApp() {
+        applyTheme(appState.settings.theme);
+        if(appState.settings.color) {
+            applyColor(appState.settings.color, appState.settings.color2, appState.settings.rgb);
+        }
+        if(!appState.settings.topic) appState.settings.topic = "Tutti gli argomenti";
+        if(!appState.settings.numQs) appState.settings.numQs = 10;
+        
+        timeInput.value = appState.settings.time === 0 ? "0 (Infinito)" : appState.settings.time;
+        qInput.value = appState.settings.numQs;
+        document.getElementById('err-count').textContent = appState.mistakes.length;
+        
+        renderTopics();
+        
+        // Posiziona il nav indicator alla partenza (Tab 0)
+        setTimeout(() => updateNavIndicator(), 50);
+        
+        // PWA Manifest init dynamically
+        const manifest = {
+            name: "Quiz Concorsi PA",
+            short_name: "QuizPA",
+            display: "standalone",
+            background_color: appState.settings.color || "#12827c",
+            theme_color: appState.settings.color || "#12827c",
+            icons: [
+                {
+                    src: "data:image/svg+xml;base64," + btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="background:#12827c"><path fill="#fff" d="M128 128h256v256H128z"/></svg>`),
+                    sizes: "192x192 512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }
+            ]
+        };
+        const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        let el = document.createElement('link');
+        el.rel = 'manifest';
+        el.href = manifestURL;
+        document.head.appendChild(el);
+    }
+
+    document.addEventListener("DOMContentLoaded", initApp);
+
+</script>
+</body>
+</html>
